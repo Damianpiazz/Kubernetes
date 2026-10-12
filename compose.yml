@@ -1,0 +1,316 @@
+name: ecommerce
+
+services:
+  eureka-server:
+    build: ./services/eureka-server
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8761/actuator/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+  kafka:
+    image: apache/kafka:3.9.0
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  auth-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: auth
+      POSTGRES_USER: auth
+      POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD:?Defina AUTH_DB_PASSWORD en .env}
+    volumes:
+      - auth_data:/var/lib/postgresql/data
+    networks:
+      - data-auth
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  users-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: users
+      POSTGRES_USER: users
+      POSTGRES_PASSWORD: ${USERS_DB_PASSWORD:?Defina USERS_DB_PASSWORD en .env}
+    volumes:
+      - users_data:/var/lib/postgresql/data
+    networks:
+      - data-users
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  products-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: products
+      POSTGRES_USER: products
+      POSTGRES_PASSWORD: ${PRODUCTS_DB_PASSWORD:?Defina PRODUCTS_DB_PASSWORD en .env}
+    volumes:
+      - products_data:/var/lib/postgresql/data
+    networks:
+      - data-products
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  orders-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: orders
+      POSTGRES_USER: orders
+      POSTGRES_PASSWORD: ${ORDERS_DB_PASSWORD:?Defina ORDERS_DB_PASSWORD en .env}
+    volumes:
+      - orders_data:/var/lib/postgresql/data
+    networks:
+      - data-orders
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  payments-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: payments
+      POSTGRES_USER: payments
+      POSTGRES_PASSWORD: ${PAYMENTS_DB_PASSWORD:?Defina PAYMENTS_DB_PASSWORD en .env}
+    volumes:
+      - payments_data:/var/lib/postgresql/data
+    networks:
+      - data-payments
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  auth-service:
+    build: ./services/auth-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://auth-db:5432/auth
+      SPRING_DATASOURCE_USERNAME: auth
+      SPRING_DATASOURCE_PASSWORD: ${AUTH_DB_PASSWORD:?Defina AUTH_DB_PASSWORD en .env}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET en .env}
+      EUREKA_URL: http://eureka-server:8761/eureka
+    depends_on:
+      auth-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    networks:
+      - backend
+      - data-auth
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
+
+  user-service:
+    build: ./services/user-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://users-db:5432/users
+      SPRING_DATASOURCE_USERNAME: users
+      SPRING_DATASOURCE_PASSWORD: ${USERS_DB_PASSWORD:?Defina USERS_DB_PASSWORD en .env}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      EUREKA_URL: http://eureka-server:8761/eureka
+    depends_on:
+      users-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    networks:
+      - backend
+      - data-users
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
+
+  product-service:
+    build: ./services/product-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://products-db:5432/products
+      SPRING_DATASOURCE_USERNAME: products
+      SPRING_DATASOURCE_PASSWORD: ${PRODUCTS_DB_PASSWORD:?Defina PRODUCTS_DB_PASSWORD en .env}
+      EUREKA_URL: http://eureka-server:8761/eureka
+    depends_on:
+      products-db:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    networks:
+      - backend
+      - data-products
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
+
+  order-service:
+    build: ./services/order-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://orders-db:5432/orders
+      SPRING_DATASOURCE_USERNAME: orders
+      SPRING_DATASOURCE_PASSWORD: ${ORDERS_DB_PASSWORD:?Defina ORDERS_DB_PASSWORD en .env}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      PRODUCT_SERVICE_BASE_URL: http://product-service:8080
+      EUREKA_URL: http://eureka-server:8761/eureka
+    depends_on:
+      orders-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+    networks:
+      - backend
+      - data-orders
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
+
+  payment-service:
+    build: ./services/payment-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://payments-db:5432/payments
+      SPRING_DATASOURCE_USERNAME: payments
+      SPRING_DATASOURCE_PASSWORD: ${PAYMENTS_DB_PASSWORD:?Defina PAYMENTS_DB_PASSWORD en .env}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      ORDER_SERVICE_BASE_URL: http://order-service:8080
+      MERCADO_PAGO_ACCESS_TOKEN: ${MERCADO_PAGO_ACCESS_TOKEN:-}
+      MERCADO_PAGO_WEBHOOK_SECRET: ${MERCADO_PAGO_WEBHOOK_SECRET:-}
+      EUREKA_URL: http://eureka-server:8761/eureka
+    depends_on:
+      payments-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+    networks:
+      - frontend
+      - backend
+      - data-payments
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
+
+  gateway:
+    build: ./services/gateway
+    ports:
+      - "8080:8080"
+    environment:
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET en .env}
+      EUREKA_URL: http://eureka-server:8761/eureka
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+      payment-service:
+        condition: service_healthy
+    networks:
+      - frontend
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
+
+networks:
+  frontend:
+  backend:
+    internal: true
+  data-auth:
+    internal: true
+  data-users:
+    internal: true
+  data-products:
+    internal: true
+  data-orders:
+    internal: true
+  data-payments:
+    internal: true
+
+volumes:
+  kafka_data:
+  auth_data:
+  users_data:
+  products_data:
+  orders_data:
+  payments_data:
