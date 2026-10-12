@@ -1,0 +1,22 @@
+# Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+!.vscode/settings.json
+.project
+.classpath
+.settings/
+
+# Logs y SO
+*.log
+.DS_Store
+Thumbs.db
+
+# Entorno local (secretos) — usar .env.example como plantilla
+.env
