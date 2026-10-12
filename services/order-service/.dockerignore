@@ -1,0 +1,11 @@
+# No subir artefactos ni configs al build context
+target/
+.vscode/
+.idea/
+*.md
+HELP.md
+mvnw
+mvnw.cmd
+.gitattributes
+.gitignore
+.vscode
