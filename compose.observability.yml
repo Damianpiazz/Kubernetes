@@ -1,0 +1,176 @@
+name: ecommerce
+
+x-obs-limits: &obs-limits
+  resources:
+    reservations:
+      cpus: "0.25"
+      memory: 256M
+    limits:
+      cpus: "1.0"
+      memory: 512M
+
+x-obs-heavy-limits: &obs-heavy-limits
+  resources:
+    reservations:
+      cpus: "0.50"
+      memory: 512M
+    limits:
+      cpus: "1.5"
+      memory: 1G
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    deploy: *obs-limits
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --enable-feature=remote-write-receiver
+      - --web.enable-lifecycle
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:2.10.8
+    deploy: *obs-heavy-limits
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - ./observability/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo_data:/var/tempo
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3200/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.7.8
+    deploy: *obs-limits
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./observability/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki_data:/loki
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3100/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  alloy:
+    image: grafana/alloy:v1.20.1
+    deploy: *obs-limits
+    command:
+      - run
+      - --storage.path=/var/lib/alloy/data
+      - --config.file=/etc/alloy/config.alloy
+    volumes:
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    networks:
+      - backend
+    depends_on:
+      tempo:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:12345/-/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.2.3
+    deploy: *obs-limits
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    networks:
+      - frontend
+      - backend
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  auth-service:
+    environment:
+      OTLP_TRACING_ENDPOINT: http://alloy:4318/v1/traces
+      TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-0.1}
+
+  user-service:
+    environment:
+      OTLP_TRACING_ENDPOINT: http://alloy:4318/v1/traces
+      TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-0.1}
+
+  product-service:
+    environment:
+      OTLP_TRACING_ENDPOINT: http://alloy:4318/v1/traces
+      TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-0.1}
+
+  order-service:
+    environment:
+      OTLP_TRACING_ENDPOINT: http://alloy:4318/v1/traces
+      TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-0.1}
+
+  payment-service:
+    environment:
+      OTLP_TRACING_ENDPOINT: http://alloy:4318/v1/traces
+      TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-0.1}
+
+  gateway:
+    environment:
+      OTLP_TRACING_ENDPOINT: http://alloy:4318/v1/traces
+      TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-0.1}
+
+  eureka-server:
+    environment:
+      OTLP_TRACING_ENDPOINT: http://alloy:4318/v1/traces
+      TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-0.1}
+
+volumes:
+  prometheus_data:
+  tempo_data:
+  loki_data:
+  alloy_data:
+  grafana_data:
