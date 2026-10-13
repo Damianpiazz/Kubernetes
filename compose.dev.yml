@@ -1,3 +1,12 @@
+x-tools-limits: &tools-limits
+  resources:
+    reservations:
+      cpus: "0.10"
+      memory: 128M
+    limits:
+      cpus: "0.50"
+      memory: 384M
+
 services:
   eureka-server:
     ports:
@@ -25,6 +34,7 @@ services:
 
   kafka-ui:
     image: provectuslabs/kafka-ui:v0.7.2
+    deploy: *tools-limits
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
@@ -40,6 +50,7 @@ services:
 
   pgadmin:
     image: dpage/pgadmin4:8.13
+    deploy: *tools-limits
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@local.dev
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-changeme}
