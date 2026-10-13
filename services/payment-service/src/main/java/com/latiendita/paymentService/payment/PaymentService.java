@@ -19,6 +19,7 @@ import com.latiendita.paymentService.payment.dto.event.PaymentRejectedEvent;
 import com.latiendita.paymentService.provider.PaymentGateway;
 import com.latiendita.paymentService.provider.PaymentGatewayFactory;
 import com.latiendita.paymentService.provider.ProviderType;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -42,6 +43,7 @@ public class PaymentService {
     private final OutboxWriter outboxWriter;
     private final OrderClient orderClient;
     private final PaymentGatewayFactory gatewayFactory;
+    private final MeterRegistry meterRegistry;
 
     @Value("${payment.provider}")
     private ProviderType provider;
@@ -102,6 +104,9 @@ public class PaymentService {
                 new PaymentCreatedEvent("PAYMENT_CREATED", saved.getId(), saved.getOrderId(),
                         saved.getExternalReference(), saved.getCustomerId(),
                         saved.getAmount(), saved.getCurrency(), Instant.now()));
+
+        meterRegistry.counter("latiendita.payments.created",
+                "provider", provider.name()).increment();
 
         return PaymentMapper.toResponse(saved);
     }
@@ -164,6 +169,11 @@ public class PaymentService {
         }
 
         PaymentEntity saved = paymentRepository.save(payment);
+
+        meterRegistry.counter("latiendita.payments.status.changed",
+                "provider", payment.getProvider().name(),
+                "status", target.name()).increment();
+
         publishStatusEvent(saved, from);
     }
 
