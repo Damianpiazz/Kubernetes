@@ -201,7 +201,7 @@ Ninguno actualmente. El patrón outbox + Kafka de `user-service`/`auth-service` 
 | `CategoryApiIntegrationTest` | Integración (Testcontainers PostgreSQL) | 9 | 201 + `Location`, 400 validación, 404, get por ID, paginación (`/paging` y `/paging-and-sorting`), PUT por body y ruta, delete |
 | `ProductServiceApplicationTests` | Context (Testcontainers PostgreSQL) | 1 | Arranque de la aplicación |
 
-> La base de datos se testea con PostgreSQL vía Testcontainers (imagen `postgres:17-alpine`, misma que `compose.yml`). Surefire corre con `-Duser.timezone=UTC` (la imagen oficial rechaza TZs locales como `America/Buenos_Aires`).
+> La base de datos se testea con PostgreSQL vía Testcontainers (imagen `postgres:17-alpine`, misma que `compose.yaml`). Surefire corre con `-Duser.timezone=UTC` (la imagen oficial rechaza TZs locales como `America/Buenos_Aires`).
 
 ```bash
 ./mvnw test
