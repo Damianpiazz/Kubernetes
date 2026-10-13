@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: la-tiendita
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  # Reemplazar CHANGE-ME: ingressClassName del controlador instalado en el clúster
+  # (nginx, traefik, gateway-api, etc.) y host DNS apuntando al balanceador.
+  ingressClassName: CHANGE-ME
+  rules:
+    - host: CHANGE-ME.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 80
