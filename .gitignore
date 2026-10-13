@@ -23,3 +23,6 @@ Thumbs.db
 
 # Herramientas
 .atl
+
+# Secretos de Kubernetes local (generar desde secrets.env.example)
+k8s/overlays/local/secrets.env
