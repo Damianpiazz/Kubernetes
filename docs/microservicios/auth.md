@@ -142,7 +142,7 @@ Formato de respuesta de error: **ProblemDetail (RFC 7807)**, devuelto por `Globa
 | `SPRING_DATASOURCE_URL` | JDBC URL de la base de datos | ✅ | — | `jdbc:postgresql://db:5432/auth` |
 | `SPRING_DATASOURCE_USERNAME` | Usuario de la base de datos | ✅ | — | `auth` |
 | `SPRING_DATASOURCE_PASSWORD` | Password de la base de datos | ✅ | — | *(secret)* |
-| `JWT_SECRET` | Secreto HS256, **≥ 32 caracteres** (si no, la app no arranca) | ✅ | `local-dev-secret-please-change-32chars` | *(secret)* |
+| `JWT_SECRET` | Secreto HS256, **≥ 32 caracteres** (si no, la app no arranca) | ✅ | — | *(secret)* |
 | `JWT_ISSUER` | `iss` del access token | ❌ | `auth-service` | `auth-service` |
 | `JWT_ACCESS_TTL_SECONDS` | Vida del access token | ❌ | `900` | `900` |
 | `JWT_REFRESH_TTL_DAYS` | Vida del refresh token | ❌ | `7` | `7` |
@@ -212,7 +212,7 @@ Topic publicado: **`account-events`** (Kafka), clave = `id` de la cuenta. Public
 | `AuthMessagingIntegrationTest` | Integración (Testcontainers PostgreSQL + EmbeddedKafka) | 2 | outbox → relay → Kafka end-to-end (clave y payload sin password), reintento de `FAILED` con tope de `outbox.relay.max-attempts` (3 en el test) |
 | `AuthServiceApplicationTests` | Context (Testcontainers PostgreSQL) | 1 | Arranque de la aplicación |
 
-> Kafka se testea con un broker **embebido en la JVM** (`@EmbeddedKafka`, sin imágenes adicionales) y la base de datos con PostgreSQL vía Testcontainers (imagen `postgres:18`). El relay automático se congela (`poll-interval-ms=600000`) y se invoca manualmente para que las aserciones sean determinísticas.
+> Kafka se testea con un broker **embebido en la JVM** (`@EmbeddedKafka`, sin imágenes adicionales) y la base de datos con PostgreSQL vía Testcontainers (imagen `postgres:17-alpine`, misma que `compose.yml`). El relay automático se congela (`poll-interval-ms=600000`) y se invoca manualmente para que las aserciones sean determinísticas.
 
 ```bash
 ./mvnw test
