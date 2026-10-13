@@ -212,7 +212,7 @@ Topic publicado: **`account-events`** (Kafka), clave = `id` de la cuenta. Public
 | `AuthMessagingIntegrationTest` | Integración (Testcontainers PostgreSQL + EmbeddedKafka) | 2 | outbox → relay → Kafka end-to-end (clave y payload sin password), reintento de `FAILED` con tope de `outbox.relay.max-attempts` (3 en el test) |
 | `AuthServiceApplicationTests` | Context (Testcontainers PostgreSQL) | 1 | Arranque de la aplicación |
 
-> Kafka se testea con un broker **embebido en la JVM** (`@EmbeddedKafka`, sin imágenes adicionales) y la base de datos con PostgreSQL vía Testcontainers (imagen `postgres:17-alpine`, misma que `compose.yml`). El relay automático se congela (`poll-interval-ms=600000`) y se invoca manualmente para que las aserciones sean determinísticas.
+> Kafka se testea con un broker **embebido en la JVM** (`@EmbeddedKafka`, sin imágenes adicionales) y la base de datos con PostgreSQL vía Testcontainers (imagen `postgres:17-alpine`, misma que `compose.yaml`). El relay automático se congela (`poll-interval-ms=600000`) y se invoca manualmente para que las aserciones sean determinísticas.
 
 ```bash
 ./mvnw test
