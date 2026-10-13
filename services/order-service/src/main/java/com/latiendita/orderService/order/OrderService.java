@@ -17,6 +17,8 @@ import com.latiendita.orderService.order.dto.event.RefundRequestedEvent;
 import com.latiendita.orderService.outbox.OutboxWriter;
 import com.latiendita.orderService.product.ProductClient;
 import com.latiendita.orderService.product.ProductDto;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -37,8 +39,24 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final OutboxWriter outboxWriter;
     private final ProductClient productClient;
+    private final MeterRegistry meterRegistry;
 
     public OrderResponse create(CreateOrderRequest request) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            OrderResponse response = doCreate(request);
+            sample.stop(meterRegistry.timer("latiendita.orders.create"));
+            meterRegistry.counter("latiendita.orders.created").increment();
+            meterRegistry.counter("latiendita.orders.revenue")
+                    .increment(response.total().doubleValue());
+            return response;
+        } catch (RuntimeException ex) {
+            sample.stop(meterRegistry.timer("latiendita.orders.create"));
+            throw ex;
+        }
+    }
+
+    private OrderResponse doCreate(CreateOrderRequest request) {
         Long customerId = CurrentUser.id();
         validateItems(request);
 
@@ -121,6 +139,9 @@ public class OrderService {
                 new OrderStatusChangedEvent(saved.getId(), saved.getOrderNumber(),
                         saved.getCustomerId(), from, target, Instant.now()));
 
+        meterRegistry.counter("latiendita.orders.status.changed",
+                "from", from.name(), "to", target.name()).increment();
+
         return OrderMapper.toResponse(saved);
     }
 
@@ -143,10 +164,14 @@ public class OrderService {
                 new OrderCancelledEvent(saved.getId(), saved.getOrderNumber(),
                         saved.getCustomerId(), reason, refundRequired, occurredAt));
 
+        meterRegistry.counter("latiendita.orders.cancelled",
+                "refund", String.valueOf(refundRequired)).increment();
+
         if (refundRequired) {
             outboxWriter.append(ORDER_EVENTS_TOPIC, saved.getId(), "REFUND_REQUESTED",
                     new RefundRequestedEvent(saved.getId(), saved.getOrderNumber(),
                             saved.getCustomerId(), saved.getTotal(), occurredAt));
+            meterRegistry.counter("latiendita.orders.refunds.requested").increment();
         }
 
         return OrderMapper.toResponse(saved);
