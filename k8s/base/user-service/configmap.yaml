@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user-service-config
+  labels:
+    app.kubernetes.io/name: user-service
+    app.kubernetes.io/part-of: la-tiendita
+data:
+  SPRING_DATASOURCE_URL: jdbc:postgresql://users-db:5432/users
+  SPRING_DATASOURCE_USERNAME: users
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  EUREKA_ENABLED: "false"

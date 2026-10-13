@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: payment-service-config
+  labels:
+    app.kubernetes.io/name: payment-service
+    app.kubernetes.io/part-of: la-tiendita
+data:
+  SPRING_DATASOURCE_URL: jdbc:postgresql://payments-db:5432/payments
+  SPRING_DATASOURCE_USERNAME: payments
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  ORDER_SERVICE_BASE_URL: http://order-service
+  EUREKA_ENABLED: "false"

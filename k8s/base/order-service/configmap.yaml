@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: order-service-config
+  labels:
+    app.kubernetes.io/name: order-service
+    app.kubernetes.io/part-of: la-tiendita
+data:
+  SPRING_DATASOURCE_URL: jdbc:postgresql://orders-db:5432/orders
+  SPRING_DATASOURCE_USERNAME: orders
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  PRODUCT_SERVICE_BASE_URL: http://product-service
+  EUREKA_ENABLED: "false"

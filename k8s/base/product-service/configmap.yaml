@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: product-service-config
+  labels:
+    app.kubernetes.io/name: product-service
+    app.kubernetes.io/part-of: la-tiendita
+data:
+  SPRING_DATASOURCE_URL: jdbc:postgresql://products-db:5432/products
+  SPRING_DATASOURCE_USERNAME: products
+  EUREKA_ENABLED: "false"
