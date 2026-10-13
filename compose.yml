@@ -1,8 +1,54 @@
 name: ecommerce
 
+x-jvm-limits: &jvm-limits
+  resources:
+    reservations:
+      cpus: "0.25"
+      memory: 256M
+    limits:
+      cpus: "1.0"
+      memory: 512M
+
+x-gateway-limits: &gateway-limits
+  resources:
+    reservations:
+      cpus: "0.25"
+      memory: 256M
+    limits:
+      cpus: "1.0"
+      memory: 384M
+
+x-eureka-limits: &eureka-limits
+  resources:
+    reservations:
+      cpus: "0.10"
+      memory: 192M
+    limits:
+      cpus: "0.50"
+      memory: 320M
+
+x-postgres-limits: &postgres-limits
+  resources:
+    reservations:
+      cpus: "0.10"
+      memory: 128M
+    limits:
+      cpus: "0.50"
+      memory: 384M
+
+x-kafka-limits: &kafka-limits
+  resources:
+    reservations:
+      cpus: "0.25"
+      memory: 512M
+    limits:
+      cpus: "1.0"
+      memory: 1G
+
 services:
   eureka-server:
     build: ./services/eureka-server
+    deploy: *eureka-limits
     networks:
       - backend
     healthcheck:
@@ -15,8 +61,10 @@ services:
 
   kafka:
     image: apache/kafka:3.9.0
+    deploy: *kafka-limits
     environment:
       KAFKA_NODE_ID: "1"
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
@@ -41,6 +89,7 @@ services:
 
   auth-db:
     image: postgres:17-alpine
+    deploy: *postgres-limits
     environment:
       POSTGRES_DB: auth
       POSTGRES_USER: auth
@@ -58,6 +107,7 @@ services:
 
   users-db:
     image: postgres:17-alpine
+    deploy: *postgres-limits
     environment:
       POSTGRES_DB: users
       POSTGRES_USER: users
@@ -75,6 +125,7 @@ services:
 
   products-db:
     image: postgres:17-alpine
+    deploy: *postgres-limits
     environment:
       POSTGRES_DB: products
       POSTGRES_USER: products
@@ -92,6 +143,7 @@ services:
 
   orders-db:
     image: postgres:17-alpine
+    deploy: *postgres-limits
     environment:
       POSTGRES_DB: orders
       POSTGRES_USER: orders
@@ -109,6 +161,7 @@ services:
 
   payments-db:
     image: postgres:17-alpine
+    deploy: *postgres-limits
     environment:
       POSTGRES_DB: payments
       POSTGRES_USER: payments
@@ -126,6 +179,7 @@ services:
 
   auth-service:
     build: ./services/auth-service
+    deploy: *jvm-limits
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://auth-db:5432/auth
       SPRING_DATASOURCE_USERNAME: auth
@@ -153,6 +207,7 @@ services:
 
   user-service:
     build: ./services/user-service
+    deploy: *jvm-limits
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://users-db:5432/users
       SPRING_DATASOURCE_USERNAME: users
@@ -179,6 +234,7 @@ services:
 
   product-service:
     build: ./services/product-service
+    deploy: *jvm-limits
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://products-db:5432/products
       SPRING_DATASOURCE_USERNAME: products
@@ -202,6 +258,7 @@ services:
 
   order-service:
     build: ./services/order-service
+    deploy: *jvm-limits
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://orders-db:5432/orders
       SPRING_DATASOURCE_USERNAME: orders
@@ -231,6 +288,7 @@ services:
 
   payment-service:
     build: ./services/payment-service
+    deploy: *jvm-limits
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://payments-db:5432/payments
       SPRING_DATASOURCE_USERNAME: payments
@@ -263,6 +321,7 @@ services:
 
   gateway:
     build: ./services/gateway
+    deploy: *gateway-limits
     ports:
       - "8080:8080"
     environment:
