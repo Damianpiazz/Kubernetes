@@ -14,6 +14,7 @@ import com.latiendita.authService.token.JwtService;
 import com.latiendita.authService.token.RefreshTokenEntity;
 import com.latiendita.authService.token.RefreshTokenService;
 import java.time.Instant;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,7 @@ public class AccountService {
     private final OutboxWriter outboxWriter;
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
+    private final MeterRegistry meterRegistry;
 
     public AccountResponse register(RegisterRequest request) {
         if (accountRepository.existsByEmail(request.email())) {
@@ -50,17 +52,21 @@ public class AccountService {
                 new AccountCreatedEvent(saved.getId(), saved.getEmail(),
                         saved.getUsername(), Instant.now()));
 
+        meterRegistry.counter("latiendita.auth.registrations").increment();
+
         return AccountMapper.toResponse(saved);
     }
 
     public TokenResponse login(LoginRequest request) {
         AccountEntity account = accountRepository.findByEmail(request.email())
-                .orElseThrow(InvalidCredentialsException::new);
+                .orElse(null);
 
-        if (!passwordEncoder.matches(request.password(), account.getPassword())) {
+        if (account == null || !passwordEncoder.matches(request.password(), account.getPassword())) {
+            meterRegistry.counter("latiendita.auth.logins.failure").increment();
             throw new InvalidCredentialsException();
         }
 
+        meterRegistry.counter("latiendita.auth.logins.success").increment();
         return issueTokens(account, null);
     }
 
