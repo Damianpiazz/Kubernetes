@@ -25,7 +25,9 @@ public class SecurityConfig {
     public static final String[] PUBLIC_PATHS = {
             "/api/auth/**",
             "/api/webhooks/**",
-            "/actuator/**"
+            "/actuator/health/**",
+            "/actuator/prometheus",
+            "/actuator/info"
     };
 
     @Bean
