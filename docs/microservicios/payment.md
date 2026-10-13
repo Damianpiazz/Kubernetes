@@ -103,7 +103,7 @@ Formato de respuesta de error: **ProblemDetail (RFC 7807)**, devuelto por `Globa
 | `409` | Conflict | Carrera entre escrituras (`@version`) | `El recurso fue modificado por otra operación; reintente la petición` |
 | `409` | Conflict | Violación de restricción única (carrera entre peticiones simultáneas) | `Violación de restricción única (posible carrera entre peticiones simultáneas)` |
 | `500` | Internal Error | Fallo inesperado | `Unexpected error` |
-| `503` | Service Unavailable | `order-service` caído al crear el pago | `El servicio de pedidos no está disponible` |
+| `503` | Service Unavailable | `order-service` caído al crear el pago (tras agotar reintentos o con el circuito abierto) | `El servicio de pedidos no está disponible` |
 | `503` | Service Unavailable | Mercado Pago caído o con error | `El proveedor de pagos respondió 500` |
 | `503` | Service Unavailable | `MERCADO_PAGO_ACCESS_TOKEN` no configurado | `MERCADO_PAGO_ACCESS_TOKEN no está configurado` |
 
@@ -222,6 +222,15 @@ Reglas:
 | `OUTBOX_RELAY_BATCH_SIZE` | Lote del relay por ciclo | ❌ | `50` | `50` |
 | `OUTBOX_RELAY_MAX_ATTEMPTS` | Intentos máximos de publicación por evento | ❌ | `10` | `10` |
 | `ORDER_SERVICE_BASE_URL` | Base URL de `order-service` para validar el pedido | ❌ | `http://localhost:8080` | `http://payments:8080` |
+| `HTTP_CLIENT_CONNECT_TIMEOUT_MS` | Timeout de conexión del client HTTP a `order-service` | ❌ | `2000` | `2000` |
+| `HTTP_CLIENT_READ_TIMEOUT_MS` | Timeout de lectura del client HTTP a `order-service` | ❌ | `3000` | `3000` |
+| `RESILIENCE_MAX_ATTEMPTS` | Intentos totales por llamada (reintento incluido) | ❌ | `3` | `3` |
+| `RESILIENCE_WAIT_DURATION` | Espera base entre reintentos (backoff exponencial) | ❌ | `200ms` | `200ms` |
+| `RESILIENCE_WAIT_DURATION_MULTIPLIER` | Multiplicador del backoff exponencial | ❌ | `2.0` | `2.0` |
+| `RESILIENCE_FAILURE_RATE_THRESHOLD` | Tasa de fallos (%) que abre el circuit breaker | ❌ | `50` | `50` |
+| `RESILIENCE_SLIDING_WINDOW_SIZE` | Ventana deslizante del circuit breaker | ❌ | `10` | `10` |
+| `RESILIENCE_MINIMUM_NUMBER_OF_CALLS` | Mínimo de llamadas antes de evaluar la tasa de fallos | ❌ | `5` | `5` |
+| `RESILIENCE_WAIT_DURATION_IN_OPEN_STATE` | Tiempo en estado abierto antes de half-open | ❌ | `10s` | `10s` |
 | `PAYMENT_PROVIDER` | Proveedor activo | ❌ | `MERCADO_PAGO` | `MERCADO_PAGO` |
 | `PAYMENT_DEFAULT_CURRENCY` | Moneda por defecto | ❌ | `ARS` | `ARS` |
 | `MERCADO_PAGO_ACCESS_TOKEN` | Access Token de Mercado Pago | ✅ en producción | *(vacío → 503)* | `TEST-xxxxxxxx` |
@@ -263,7 +272,7 @@ Reglas:
 
 | Servicio | Para qué | Protocolo | Fallback si cae | Crítica |
 |---|---|---|---|---|
-| `order-service` | Verificar que el pedido existe, es del cliente y está `PENDING`; obtener el `total` y los ítems | HTTP/REST (`GET /api/orders/{id}`) | `503` al crear el pago (las consultas de pagos existentes siguen funcionando) | ✅ Sí (solo al crear) |
+| `order-service` | Verificar que el pedido existe, es del cliente y está `PENDING`; obtener el `total` y los ítems | HTTP/REST (`GET /api/orders/{id}`) | Reintenta 3 veces (backoff exponencial) y abre un circuit breaker tras el 50% de fallos; si se agota → `503` al crear el pago (las consultas de pagos existentes siguen funcionando) | ✅ Sí (solo al crear) |
 
 > La identidad del cliente no implica dependencia de `auth-service`: llega resuelta en el header `X-User-Id` que inyecta el Gateway y se reenvía a `order-service`.
 
@@ -298,6 +307,7 @@ Topic publicado: **`payment-events`** (Kafka). **Clave del mensaje = `orderId`**
 | Archivo | Tipo | Cantidad | Cubre |
 |---|---|---|---|
 | `PaymentServiceTest` | Unit (Mockito) | 14 | create con preferencia + evento en outbox, pedido no `PENDING` → 400, pedido `PAID` → 409, pedido ajeno → 404, fallo del proveedor → 503, `applyFromProvider` aprobado y rechazado, notificación obsoleta ignorada, monto que no coincide → 400, recurso del proveedor desconocido → 404, ownership en `findById`/`findByOrderId` |
+| `OrderClientTest` | Unit (MockRestServiceServer) | 5 | 200 → DTO, 404 → `OrderNotFoundException` sin reintento, 5xx reintenta 3 veces y agota → 503, reintento recuperado (500 → 200), circuito abierto → 503 sin llamada HTTP |
 | `PaymentStatusTest` | Unit | 6 | Transiciones completas de la máquina de estados, `APPROVED` terminal, `rank()`, `isFinal()` |
 | `MercadoPagoStatusMapperTest` | Unit | 7 | Mapeo de todos los status de Mercado Pago, default a `PENDING` y mayúsculas |
 | `WebhookSignatureValidatorTest` | Unit | 9 | Firma válida, secreto incorrecto, `resourceId`/`ts`/`request-id` alterados, header ausente o malformado, secreto sin configurar, `resourceId` nulo |
