@@ -80,7 +80,7 @@ Formato de respuesta de error: **ProblemDetail (RFC 7807)**, devuelto por `Globa
 | `409` | Conflict | Transición de estado inválida (ej. cancelar un `SHIPPED`, entregar un `PENDING`) | `No se puede pasar de PENDING a DELIVERED` |
 | `409` | Conflict | Carrera entre escrituras (`@version`) | `El recurso fue modificado por otra operación; reintente la petición` |
 | `409` | Conflict | Violación de restricción única (carrera entre peticiones simultáneas) | `Violación de restricción única (posible carrera entre peticiones simultáneas)` |
-| `503` | Service Unavailable | `product-service` caído o con error al crear el pedido | `El servicio de productos no está disponible` |
+| `503` | Service Unavailable | `product-service` caído o con error al crear el pedido (tras agotar reintentos o con el circuito abierto) | `El servicio de productos no está disponible` |
 
 ---
 
@@ -166,6 +166,15 @@ Formato de respuesta de error: **ProblemDetail (RFC 7807)**, devuelto por `Globa
 | `OUTBOX_RELAY_BATCH_SIZE` | Lote del relay por ciclo | ❌ | `50` | `50` |
 | `OUTBOX_RELAY_MAX_ATTEMPTS` | Intentos máximos de publicación por evento | ❌ | `10` | `10` |
 | `PRODUCT_SERVICE_BASE_URL` | Base URL de `product-service` para resolver precios | ❌ | `http://localhost:8080` | `http://products:8080` |
+| `HTTP_CLIENT_CONNECT_TIMEOUT_MS` | Timeout de conexión del client HTTP a `product-service` | ❌ | `2000` | `2000` |
+| `HTTP_CLIENT_READ_TIMEOUT_MS` | Timeout de lectura del client HTTP a `product-service` | ❌ | `3000` | `3000` |
+| `RESILIENCE_MAX_ATTEMPTS` | Intentos totales por llamada (reintento incluido) | ❌ | `3` | `3` |
+| `RESILIENCE_WAIT_DURATION` | Espera base entre reintentos (backoff exponencial) | ❌ | `200ms` | `200ms` |
+| `RESILIENCE_WAIT_DURATION_MULTIPLIER` | Multiplicador del backoff exponencial | ❌ | `2.0` | `2.0` |
+| `RESILIENCE_FAILURE_RATE_THRESHOLD` | Tasa de fallos (%) que abre el circuit breaker | ❌ | `50` | `50` |
+| `RESILIENCE_SLIDING_WINDOW_SIZE` | Ventana deslizante del circuit breaker | ❌ | `10` | `10` |
+| `RESILIENCE_MINIMUM_NUMBER_OF_CALLS` | Mínimo de llamadas antes de evaluar la tasa de fallos | ❌ | `5` | `5` |
+| `RESILIENCE_WAIT_DURATION_IN_OPEN_STATE` | Tiempo en estado abierto antes de half-open | ❌ | `10s` | `10s` |
 | `EUREKA_URL` | Registry de Eureka para registrarse | ❌ | `http://localhost:8761/eureka` | `http://eureka:8761/eureka` |
 | `EUREKA_ENABLED` | Habilita el cliente Eureka (`false` para correr sin registry) | ❌ | `true` | `true` |
 | `LOGGING_LEVEL_ROOT` | Nivel de log | ❌ | `INFO` | `INFO` |
@@ -195,7 +204,7 @@ Formato de respuesta de error: **ProblemDetail (RFC 7807)**, devuelto por `Globa
 
 | Servicio | Para qué | Protocolo | Fallback si cae | Crítica |
 |---|---|---|---|---|
-| `product-service` | Resolver precio/título/SKU vigentes al crear un pedido | HTTP/REST (`GET /api/products/{id}`) | `503` al crear el pedido (las consultas de pedidos existentes siguen funcionando) | ✅ Sí (solo al crear) |
+| `product-service` | Resolver precio/título/SKU vigentes al crear un pedido | HTTP/REST (`GET /api/products/{id}`) | Reintenta 3 veces (backoff exponencial) y abre un circuit breaker tras el 50% de fallos; si se agota → `503` al crear el pedido (las consultas de pedidos existentes siguen funcionando) | ✅ Sí (solo al crear) |
 | `payment-service` | Recibe su evento `PAYMENT_APPROVED` (no es una llamada sincrónica) | Kafka (`payment-events`) | El pedido permanece `PENDING` hasta que el consumer vuelva a procesar | ❌ No |
 
 > La identidad del cliente no implica dependencia de `auth-service`: llega resuelta en el header `X-User-Id` que inyecta el Gateway.
@@ -236,6 +245,7 @@ Topic consumido: **`payment-events`** (Kafka), group-id `order-service`, `auto-o
 | Archivo | Tipo | Cantidad | Cubre |
 |---|---|---|---|
 | `OrderServiceTest` | Unit (Mockito) | 13 | create con total calculado desde precios del servidor, total del cliente coincide/no coincide (400), producto duplicado, items vacíos, 404, 403 con pedido de otro cliente, transición válida PENDING→PAID, transición inválida (409), CANCELLED vía `/status` rechazado (400), cancel de `PENDING` sin reembolso, cancel de `PAID` con `REFUND_REQUESTED`, cancel de `SHIPPED` (409) |
+| `ProductClientTest` | Unit (MockRestServiceServer) | 5 | 200 → DTO, 404 → `ProductNotFoundException` sin reintento, 5xx reintenta 3 veces y agota → 503, reintento recuperado (500 → 200), circuito abierto → 503 sin llamada HTTP |
 | `PaymentApprovedConsumerTest` | Unit (Mockito) | 5 | `PENDING`→`PAID` al recibir `PAYMENT_APPROVED`, idempotencia si el pedido ya no es `PENDING`, ignorado de `PAYMENT_CREATED`/`PAYMENT_REJECTED`/`PAYMENT_CANCELLED`, JSON malformado descartado sin lanzar, pedido inexistente re-lanza para que Kafka reintente |
 | `OrderApiIntegrationTest` | Integración (Testcontainers PostgreSQL) | 9 | 201 + `Location` + total e ítems calculados, 400 con total que no coincide, 401 sin `X-User-Id`, 404, 403 con pedido ajeno, paginación solo del cliente, cancel, 409 en transición inválida, atomicidad del outbox en la misma transacción |
 | `OrderMessagingIntegrationTest` | Integración (Testcontainers PostgreSQL + EmbeddedKafka) | 2 | outbox → relay → Kafka end-to-end (clave = orderId, payload con `unitPrice`/`subtotal`), reintento de `FAILED` con tope de `outbox.relay.max-attempts` (3 en el test) |
