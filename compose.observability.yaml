@@ -1,4 +1,4 @@
-name: ecommerce
+name: la-tiendita
 
 x-obs-limits: &obs-limits
   resources:
