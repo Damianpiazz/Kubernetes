@@ -103,7 +103,7 @@ Formato **ProblemDetail (RFC 7807)**, emitido por `GatewayErrorController` (mism
 | `PRODUCT_SERVICE_BASE_URL` | Override directo de la ruta `products` | ❌ | `lb://productService` | `http://product:8080` |
 | `ORDER_SERVICE_BASE_URL` | Override directo de la ruta `orders` | ❌ | `lb://orderService` | `http://order:8080` |
 | `PAYMENT_SERVICE_BASE_URL` | Override directo de `payments` y `webhooks` | ❌ | `lb://paymentService` | `http://payment:8080` |
-| `JWT_SECRET` | Secreto HS256 para validar tokens, ≥ 32 caracteres | ✅ | `local-dev-secret-please-change-32chars` | *(secret)* |
+| `JWT_SECRET` | Secreto HS256 para validar tokens, ≥ 32 caracteres | ✅ | — | *(secret)* |
 | `JWT_ISSUER` | `iss` esperado en los tokens | ❌ | `auth-service` | `auth-service` |
 | `GATEWAY_MAX_REQUEST_SIZE` | Tamaño máximo de `Content-Length` (bytes) | ❌ | `1048576` | `1048576` |
 | `GATEWAY_CONNECT_TIMEOUT_MS` | Timeout de conexión hacia el destino (ms) | ❌ | `2000` | `2000` |
