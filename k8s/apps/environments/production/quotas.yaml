@@ -1,0 +1,41 @@
+# Límites de agregado SOLO en producción (namespace latiendita). En local no
+# aplica: ahí el tier de datos comparte namespace y entraría en conflicto.
+#
+# Base: 6 servicios x 2 réplicas = 12 pods (3 CPU / 3 Gi de pedidos reales) con
+# holgura para el maxSurge de los rolling updates (+6 pods durante un deploy).
+# Si escalás réplicas o metés HPA: ampliar ANTES del deploy. Un quota
+# alcanzado deja los pods en Forbidden (error claro, pero bloquea el rollout).
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: latiendita-quota
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  hard:
+    pods: "30"
+    requests.cpu: "4"
+    requests.memory: 4Gi
+    limits.cpu: "16"
+    limits.memory: 8Gi
+---
+# Red de seguridad: todo container nuevo sin `resources` hereda estos valores
+# (hoy los 6 ya los traen explícitos; esto cubre el olvido futuro).
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: latiendita-limits
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 250m
+        memory: 256Mi
+      default:
+        cpu: "1"
+        memory: 512Mi
+      max:
+        cpu: "2"
+        memory: 1Gi

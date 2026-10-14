@@ -13,14 +13,19 @@ resources:
   - ../../base
   - ingress.yaml
 
-# Credenciales REALES de Grafana. Reemplazar CHANGE-ME antes de aplicar.
-# Ojo: si van a ser sensibles, preferible envs: [secrets.env] con un archivo
-# gitignored (mismo patrón que k8s/apps/environments/local/secrets.env).
+# Credenciales REALES de Grafana: van en secrets.env (gitignored), mismo
+# patrón que k8s/apps/environments/production/secrets.env. NO commitear el
+# archivo real; la plantilla es secrets.env.example.
+#
+#   cp k8s/observability/environments/production/secrets.env.example \
+#      k8s/observability/environments/production/secrets.env
+#
+# Si secrets.env no existe, `kubectl kustomize` falla en vez de renderizar
+# un CHANGE-ME obvio.
 secretGenerator:
   - name: grafana-admin
-    literals:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=CHANGE-ME
+    envs:
+      - secrets.env
 
 generatorOptions:
   disableNameSuffixHash: true

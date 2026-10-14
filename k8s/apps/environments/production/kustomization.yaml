@@ -14,6 +14,7 @@ resources:
   - ../../base
   - ingress.yaml
   - pdb.yaml
+  - quotas.yaml
 
 # Reemplazar CHANGE-ME por el registry real y un tag inmutable (SHA de commit o version).
 images:
@@ -50,6 +51,18 @@ replicas:
   - name: gateway
     count: 2
 
+# En producción siempre se consulta el registry. Los tags de `images:` son
+# CHANGE-ME (mutables): con IfNotPresent, un nodo con la imagen vieja en
+# caché serviría código viejo tras un deploy. Local queda en IfNotPresent
+# (las imágenes se cargan con kind load, no hay registry).
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always
+
 # Endpoints de bases de datos y Kafka EXTERNOS (gestionados). Reemplazar CHANGE-ME.
 configMapGenerator:
   - name: auth-service-config
@@ -85,3 +98,23 @@ configMapGenerator:
     behavior: merge
     literals:
       - CORS_ALLOWED_ORIGINS=https://CHANGE-ME.example.com
+
+# Secretos de la aplicación: mismo patrón que local (§8 de la doc).
+# secrets.env es gitignored y NO se commitea: copiar secrets.env.example y
+# rellenar los CHANGE-ME con valores reales (generarlos, p. ej. con
+# `openssl rand -base64 48`) antes de aplicar.
+#
+#   cp k8s/apps/environments/production/secrets.env.example \
+#      k8s/apps/environments/production/secrets.env
+#   scripts/deploy.sh -s k8s/apps/environments/production/secrets.env \
+#      k8s/apps/environments/production
+#
+# Si secrets.env no existe, `kubectl kustomize` falla (deploy.sh sale con
+# código 3) en vez de renderizar los Deployments sin el Secret.
+secretGenerator:
+  - name: latiendita-secrets
+    envs:
+      - secrets.env
+
+generatorOptions:
+  disableNameSuffixHash: true
