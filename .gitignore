@@ -24,5 +24,7 @@ Thumbs.db
 # Herramientas
 .atl
 
-# Secretos de Kubernetes local (generar desde secrets.env.example)
+# Secretos de Kubernetes (generar desde secrets.env.example)
 k8s/apps/environments/local/secrets.env
+k8s/apps/environments/production/secrets.env
+k8s/observability/environments/production/secrets.env
