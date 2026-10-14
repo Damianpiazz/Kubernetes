@@ -11,6 +11,7 @@ set -euo pipefail
 #   1 usage error          2 secrets file missing/sourcing failed
 #   3 kubectl apply failed 4 workload(s) not ready within timeout
 #   5 secrets file lacks keys required by the manifests
+#   6 production target with template placeholder values
 #
 # User-facing output is Spanish; these comments stay English for maintainers.
 
@@ -32,7 +33,8 @@ Opciones:
   -d, --dry-run             Renderiza y valida, pero no aplica nada
   -h, --help                Esta ayuda
 
-Códigos de salida: 1 uso, 2 secrets, 3 apply, 4 no ready, 5 claves faltantes
+Códigos de salida: 1 uso, 2 secrets, 3 apply, 4 no ready, 5 claves faltantes,
+                   6 valores de plantilla en target de producción
 EOF
 }
 
@@ -181,6 +183,34 @@ if [[ -n "$REQUIRED_KEYS" ]]; then
   done_step "$(tr '\n' ' ' <<<"$REQUIRED_KEYS" | xargs) validadas"
 else
   done_step "los manifests no referencian secretKeyRef"
+fi
+
+# Guard: un target de producción no puede arrastrar valores de plantilla
+# (CHANGE-ME, changeme, dev-only...) en NINGUNA clave del archivo de secrets,
+# incluidas las que los manifests consumen vía envFrom y por lo tanto no
+# aparecen en secretKeyRef (ej.: grafana-admin).
+PROD_TARGET=""
+for path in "$@"; do
+  case "$path" in
+    *production*) PROD_TARGET="$path" ;;
+  esac
+done
+if [[ -n "$PROD_TARGET" ]]; then
+  FILE_KEYS="$(grep -E '^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*=' "$SECRETS_FILE" \
+    | sed -E 's/^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*).*/\2/')"
+  WEAK=""
+  while IFS= read -r key; do
+    [[ -n "$key" ]] || continue
+    declare -p "$key" >/dev/null 2>&1 || continue   # no exportada: ignorar
+    [[ -n "${!key}" ]] || continue                   # vacío: ya es solo un aviso
+    lcval="$(printf '%s' "${!key}" | tr '[:upper:]' '[:lower:]')"
+    case "$lcval" in
+      *changeme*|*change-me*|*dev-only*) WEAK="$WEAK $key" ;;
+    esac
+  done <<<"$FILE_KEYS"
+  if [[ -n "$WEAK" ]]; then
+    fail "target de producción con valores de plantilla en '$SECRETS_FILE':$WEAK  (reemplazar CHANGE-ME por valores reales)" 6
+  fi
 fi
 
 # --- 4. Namespaces -----------------------------------------------------------

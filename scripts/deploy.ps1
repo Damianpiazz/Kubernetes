@@ -32,6 +32,7 @@
     Códigos de salida (idénticos a deploy.sh):
       1 uso incorrecta  2 secrets faltantes/inválidos  3 kubectl apply falló
       4 workload no listo dentro del timeout  5 faltan claves requeridas
+      6 valores de plantilla en target de producción
 #>
 
 # Los comandos nativos se validan por $LASTEXITCODE; EAP Stop rompe el
@@ -208,7 +209,8 @@ Opciones:
   -d, --dry-run             Renderiza y valida, pero no aplica nada
   -h, --help                Esta ayuda
 
-Códigos de salida: 1 uso, 2 secrets, 3 apply, 4 no ready, 5 claves faltantes
+Códigos de salida: 1 uso, 2 secrets, 3 apply, 4 no ready, 5 claves faltantes,
+                   6 valores de plantilla en target de producción
 '@
     Write-Host $text
 }
@@ -417,6 +419,25 @@ try {
         Complete-Step ("{0} validadas" -f (($requiredKeys -join ' ').Trim()))
     } else {
         Complete-Step 'los manifests no referencian secretKeyRef'
+    }
+
+    # Guard: un target de producción no puede arrastrar valores de plantilla
+    # (CHANGE-ME, changeme, dev-only...) en NINGUNA clave del archivo de
+    # secrets, incluidas las que se inyectan vía envFrom (ej.: grafana-admin).
+    $ProdTarget = ''
+    foreach ($path in $Manifests) {
+        if ([string]$path -like '*production*') { $ProdTarget = [string]$path }
+    }
+    if ($ProdTarget -and $envMap.Count -gt 0) {
+        $weak = @()
+        foreach ($key in ($envMap.Keys | Sort-Object)) {
+            $val = [string]$envMap[$key]
+            if ([string]::IsNullOrEmpty($val)) { continue }    # vacío: ya es solo un aviso
+            if ($val.ToLowerInvariant() -match 'changeme|change-me|dev-only') { $weak += $key }
+        }
+        if ($weak.Count -gt 0) {
+            Stop-Script -Message ("target de producción con valores de plantilla en '{0}': {1}  (reemplazar CHANGE-ME por valores reales)" -f $SecretsFile, ($weak -join ' ')) -ExitCode 6
+        }
     }
 
     # --- 4. Namespaces --------------------------------------------------------
