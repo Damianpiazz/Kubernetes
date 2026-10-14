@@ -2,10 +2,14 @@
 # usando la API de Kubernetes, y recibe el OTLP que envían las apps para
 # reenviarlo a Tempo. Va como DaemonSet: un contenedor por nodo.
 #
-# Nota de seguridad: la imagen no declara USER y arranca como root; por eso acá
-# NO se dropean capabilities (el contenedor necesita escribir en
-# /var/lib/alloy/data, que la imagen crea con uid 473). Sí se aplica
-# allowPrivilegeEscalation: false. No necesita hostPath ni acceso al nodo.
+# Seguridad: la imagen no declara USER, así que se fija explícitamente el uid
+# 473 (el que la imagen usa para /var/lib/alloy/data; el emptyDir se ajusta con
+# fsGroup) con runAsNonRoot + drop: [ALL] + seccomp RuntimeDefault.
+#
+# PENDIENTE (§15): las posiciones de tail están en emptyDir → al recrearse el
+# pod se pierden y Loki puede recibir logs duplicados/faltantes. Persistirlas
+# exige hostPath (un PVC RWO no se monta en todos los nodos de un DaemonSet),
+# lo que violaría la regla "sin hostPath" del repo.
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -24,6 +28,13 @@ spec:
         app.kubernetes.io/part-of: la-tiendita
     spec:
       serviceAccountName: alloy
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 473
+        runAsGroup: 473
+        fsGroup: 473
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: alloy
           image: grafana/alloy:v1.20.1
@@ -69,6 +80,9 @@ spec:
               memory: 256Mi
           securityContext:
             allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           volumeMounts:
             - name: config
               mountPath: /etc/alloy/config.alloy
@@ -92,6 +106,10 @@ metadata:
   labels:
     app.kubernetes.io/name: alloy
     app.kubernetes.io/part-of: la-tiendita
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: /metrics
+    prometheus.io/port: "12345"
 spec:
   type: ClusterIP
   selector:

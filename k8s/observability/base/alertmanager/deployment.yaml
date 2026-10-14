@@ -86,6 +86,10 @@ metadata:
   labels:
     app.kubernetes.io/name: alertmanager
     app.kubernetes.io/part-of: la-tiendita
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: /metrics
+    prometheus.io/port: "9093"
 spec:
   type: ClusterIP
   selector:

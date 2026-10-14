@@ -106,8 +106,17 @@ metadata:
   labels:
     app.kubernetes.io/name: loki
     app.kubernetes.io/part-of: la-tiendita
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: /metrics
+    prometheus.io/port: "3100"
 spec:
+  # Headless: es el Service de gobierno del StatefulSet (spec.serviceName), así
+  # el DNS da la IP del pod (loki-0.loki…) y hay identidad de red estable por
+  # réplica — igual que postgres/kafka. El port-forward por service sigue
+  # funcionando (kubectl resuelve un pod detrás del selector).
   type: ClusterIP
+  clusterIP: None
   selector:
     app.kubernetes.io/name: loki
   ports:

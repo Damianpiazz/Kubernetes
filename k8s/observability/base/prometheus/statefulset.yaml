@@ -102,7 +102,12 @@ metadata:
     app.kubernetes.io/name: prometheus
     app.kubernetes.io/part-of: la-tiendita
 spec:
+  # Headless: es el Service de gobierno del StatefulSet (spec.serviceName), así
+  # el DNS da la IP del pod (prometheus-0.prometheus…) y hay identidad de red
+  # estable por réplica — igual que postgres/kafka. El port-forward por service
+  # sigue funcionando (kubectl resuelve un pod detrás del selector).
   type: ClusterIP
+  clusterIP: None
   selector:
     app.kubernetes.io/name: prometheus
   ports:

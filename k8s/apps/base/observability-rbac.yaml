@@ -1,0 +1,44 @@
+# RBAC de lectura que otorga el namespace de la aplicación (latiendita) a los
+# ServiceAccounts del stack de observabilidad (latiendita-observability):
+#
+#   - prometheus: kubernetes_sd role=endpoints sobre los Services/Pods de acá
+#     (el filtro de namespaces estático de prometheus.k8s.yml no necesita la
+#     API de `namespaces`, por eso no se concede).
+#   - alloy: discovery.kubernetes de pods + lectura del subrecurso pods/log
+#     (loki.source.kubernetes). Su config también filtra `names = ["latiendita"]`.
+#
+# Role/RoleBinding (no ClusterRole): todo lo que leen está en ESTE namespace.
+# Los subjects están en otro namespace, lo cual es válido en un RoleBinding.
+# Se declara acá (y no en k8s/observability/base) porque ese kustomization
+# fuerza `namespace: latiendita-observability` y pisaría este.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: observability-read
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+rules:
+  - apiGroups: [""]
+    resources: ["services", "endpoints", "pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: observability-read
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: observability-read
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: latiendita-observability
+  - kind: ServiceAccount
+    name: alloy
+    namespace: latiendita-observability

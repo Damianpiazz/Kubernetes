@@ -13,6 +13,13 @@ metadata:
 spec:
   replicas: 1
   revisionHistoryLimit: 3
+  # PVC RWO + RollingUpdate = deadlock en multi-nodo: con 1 réplica
+  # maxUnavailable calcula 0, el pod nuevo se crea primero y si cae en OTRO
+  # nodo no puede montar el volumen (Multi-Attach) mientras el viejo exista.
+  # Recreate termina el viejo antes de crear el nuevo: unos segundos sin
+  # Grafana a cambio de no poder quedar el deploy colgado.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: grafana
@@ -30,9 +37,10 @@ spec:
           image: grafana/grafana:13.2.3
           imagePullPolicy: IfNotPresent
           env:
-            # envFrom en lugar de inyectar por clave: deploy.sh exige que toda
-            # clave referenciada exista en el archivo de secrets, y estas
-            # credenciales las genera el propio kustomization.
+            # envFrom en lugar de inyectar por clave: las credenciales las
+            # genera el propio kustomization desde secrets.env (gitignored) y
+            # el guard de deploy.* valida TODAS las claves de ese archivo en
+            # targets de producción (exit 6 si siguen siendo de plantilla).
             - name: GF_USERS_ALLOW_SIGN_UP
               value: "false"
             - name: GF_ANALYTICS_REPORTING_ENABLED
@@ -125,6 +133,10 @@ metadata:
   labels:
     app.kubernetes.io/name: grafana
     app.kubernetes.io/part-of: la-tiendita
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: /metrics
+    prometheus.io/port: "3000"
 spec:
   type: ClusterIP
   selector:

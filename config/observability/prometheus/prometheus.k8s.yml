@@ -3,7 +3,8 @@
 # Diferencia con la variante de Docker (prometheus/prometheus.yml): los targets
 # no están en una lista estática sino que se descubren con la API de Kubernetes
 # (kubernetes_sd, role: endpoints) filtrando por la anotación prometheus.io/scrape
-# que declaran los Services en k8s/apps/base/<servicio>/service.yaml.
+# que declaran los Services en k8s/apps/base/<servicio>/service.yaml y en
+# k8s/observability/base/*.
 #
 # Importante: NO se crea una etiqueta "service" en los relabel_configs. La app ya
 # expone su propia etiqueta "service" (management.metrics.tags.service) y
@@ -44,6 +45,39 @@ scrape_configs:
         target_label: __metrics_path__
         regex: "(.+)"
       # Etiquetas de contexto útiles para debuggear.
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_service_name]
+        target_label: k8s_service
+
+  # La observabilidad se observa a sí misma: sin este job, TargetDown no cubre
+  # el stack que dispara las alertas (solo se scrapeaba Prometheus a sí mismo
+  # y las apps). Ojo: varios de estos Services son multi-puerto (loki 9096,
+  # tempo/alloy 4317-4318 no sirven /metrics), así que el puerto sale de la
+  # anotación prometheus.io/port.
+  - job_name: latiendita-observability
+    metrics_path: /metrics
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names: [latiendita-observability]
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+        action: keep
+        regex: "true"
+      - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: "(.+)"
+      # Reescribe la dirección al puerto de la anotación; si no hay anotación
+      # el regex no matchea y se conserva el descubierto (servicios de 1 puerto).
+      - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
       - source_labels: [__meta_kubernetes_namespace]
         target_label: namespace
       - source_labels: [__meta_kubernetes_pod_name]

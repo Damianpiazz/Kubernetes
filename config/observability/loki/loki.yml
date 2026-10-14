@@ -37,7 +37,11 @@ query_range:
 ruler:
   alertmanager_url: http://alertmanager:9093
   enable_alertmanager_v2: true
-  enable_api: true
+  # API de reglas DESHABILITADA: el storage del ruler (/etc/loki/rules) es un
+  # ConfigMap montado readOnly — la API escribiría ahí y fallaría. Las reglas
+  # son código: viven en config/observability/loki/rules/ (necesidad de la API
+  # ⇒ montar un emptyDir + initContainer que copie, decisión pendiente).
+  enable_api: false
   evaluation_interval: 1m
   # Directorio temporal de evaluación: debe ser escribible por el usuario de la imagen.
   rule_path: /loki/rules-temp
