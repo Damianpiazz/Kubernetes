@@ -269,11 +269,13 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
 else
   step "Esperar workloads (hasta ${TIMEOUT}s)"
   if [[ -n "$WORKLOADS" ]]; then
-    DEADLINE=$((SECONDS + TIMEOUT))
     NOT_READY=0
     while IFS='|' read -r kind name ns; do
       [[ -n "$name" ]] || continue
       [[ "$ns" == "-" ]] && ns="$STATUS_NS"
+      # --timeout es por workload (como declara la ayuda): cada rollout arranca
+      # con el presupuesto completo, igual que kind-up.sh y deploy.ps1.
+      DEADLINE=$((SECONDS + TIMEOUT))
       REMAIN=$((DEADLINE - SECONDS))
       (( REMAIN > 0 )) || REMAIN=1
       if ROLLOUT_OUT="$(kubectl rollout status "$kind/$name" -n "$ns" --timeout="${REMAIN}s" 2>&1)"; then

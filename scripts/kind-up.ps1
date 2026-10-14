@@ -27,6 +27,20 @@
 
 .EXAMPLE
     ./kind-up.ps1 -Tag dev -SkipBuild
+
+.NOTES
+    Script autocontenido: no dot-sourcea librerías. Correr desde la raíz del
+    repo.
+
+    Códigos de salida (idénticos a kind-up.sh):
+      1 uso incorrecta / repo sin k8s/overlays/local
+      2 herramientas faltantes o daemon de Docker caído
+      3 clúster no creado / contexto no activado
+      4 secrets locales (falta el example o no se pudo copiar)
+      5 build fallido / imagen ausente / kind load fallido
+      6 kubectl apply falló
+      7 algún StatefulSet o Deployment no quedó listo
+      8 pods del namespace no listos
 #>
 [CmdletBinding()]
 param(
@@ -39,7 +53,138 @@ param(
 # Los comandos nativos se validan por $LASTEXITCODE; EAP Stop rompe el
 # streaming de docker/kubectl cuando escriben en stderr.
 $ErrorActionPreference = 'Continue'
-. (Join-Path $PSScriptRoot 'lib/console.ps1')
+
+# --- console (bloque espejo) --------------------------------------------------
+# Helpers embebidos: este bloque es idéntico en todos los .ps1 de scripts/ que lo declaran.
+# Sin dependencias externas; si cambia acá, cambia en los demás.
+$script:UseColor = -not [bool]$env:NO_COLOR
+if ($env:TERM -eq 'dumb') { $script:UseColor = $false }
+
+# Sin esto, PowerShell 5.1 escribe la salida redirigida con la codepage de la
+# consola (OEM) y los símbolos/acentos quedan como '?' en pipes y logs de CI.
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
+try { [Console]::ErrorEncoding = [System.Text.Encoding]::UTF8 } catch { }
+
+$script:Rule = [string]::new([char]0x2500, 72)
+$script:StepWatch = $null
+$script:ScriptWatch = [System.Diagnostics.Stopwatch]::StartNew()
+$script:WarnCount = 0
+
+function Write-Line {
+    param([string]$Text = '', $Color)
+    if ($script:UseColor -and $Color) { Write-Host $Text -ForegroundColor $Color }
+    else { Write-Host $Text }
+}
+
+function Write-Header {
+    param([string]$Title, [string[]]$Meta = @())
+    Write-Host ''
+    Write-Line $script:Rule DarkGray
+    Write-Line "  $Title"
+    foreach ($m in $Meta) { Write-Line "  $m" DarkGray }
+    Write-Line $script:Rule DarkGray
+}
+
+function Start-Step {
+    param([int]$Number, [int]$Total, [string]$Title)
+    Write-Host ''
+    Write-Line ('  [{0}/{1}] {2}' -f $Number, $Total, $Title) Cyan
+    $script:StepWatch = [System.Diagnostics.Stopwatch]::StartNew()
+}
+
+function Complete-Step {
+    param([string]$Summary = '')
+    if ($null -ne $script:StepWatch) { $script:StepWatch.Stop() }
+    $took = ''
+    if ($null -ne $script:StepWatch) { $took = Format-Duration $script:StepWatch.Elapsed.TotalSeconds }
+    $line = '  ✓'
+    if ($Summary) { $line += " $Summary" }
+    if ($took) { $line += (' ' * [Math]::Max(2, 52 - $line.Length)) + $took }
+    Write-Line $line Green
+}
+
+function Write-Ok   { param([string]$Text = '') Write-Line "    ✓ $Text" Green }
+function Write-Warn { param([string]$Text = '') $script:WarnCount++; Write-Line "    ! $Text" Yellow }
+function Write-Note { param([string]$Text = '') Write-Line "      $Text" DarkGray }
+function Write-Info { param([string]$Text = '') Write-Line "    $Text" }
+
+function Format-Duration {
+    param([double]$Seconds)
+    if ($Seconds -lt 1)  { return ('{0:N0} ms' -f ($Seconds * 1000)) }
+    if ($Seconds -lt 60) { return ('{0:N1} s' -f $Seconds) }
+    $ts = [TimeSpan]::FromSeconds($Seconds)
+    return ('{0}m {1:00}s' -f [int][Math]::Floor($ts.TotalMinutes), $ts.Seconds)
+}
+
+function Format-Bytes {
+    param([long]$Bytes)
+    if ($Bytes -ge 1GB) { return ('{0:N2} GB' -f ($Bytes / 1GB)) }
+    if ($Bytes -ge 1MB) { return ('{0:N0} MB' -f ($Bytes / 1MB)) }
+    if ($Bytes -ge 1KB) { return ('{0:N0} KB' -f ($Bytes / 1KB)) }
+    return "$Bytes B"
+}
+
+function Test-Command {
+    param([string]$Name)
+    return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
+}
+
+function Assert-Tool {
+    param([string]$Name, [string]$Hint, [int]$ExitCode = 2)
+    if (Test-Command $Name) { return }
+    if (-not $Hint) { $Hint = "Instalar '$Name' y reintentar." }
+    Stop-Script -Message "Falta la herramienta '$Name'." -Hint $Hint -ExitCode $ExitCode
+}
+
+function Invoke-Tool {
+    param([string]$File, [string[]]$ToolArgs = @())
+    $output = & $File @ToolArgs 2>&1 | ForEach-Object { "$_" }
+    [pscustomobject]@{
+        Text     = ($output -join "`n")
+        Lines    = @($output)
+        ExitCode = $LASTEXITCODE
+    }
+}
+
+function Stop-Script {
+    param([string]$Message, [string]$Hint, [int]$ExitCode = 1)
+    Write-Host ''
+    $text = "  ✗ $Message"
+    try { [Console]::Error.WriteLine($text) } catch { Write-Host $text -ForegroundColor Red }
+    if ($Hint) {
+        $h = "         → $Hint"
+        try { [Console]::Error.WriteLine($h) } catch { Write-Host $h -ForegroundColor Yellow }
+    }
+    if ($null -ne $script:ScriptWatch) {
+        $script:ScriptWatch.Stop()
+        $t = '  Tiempo total: {0}' -f (Format-Duration $script:ScriptWatch.Elapsed.TotalSeconds)
+        try { [Console]::Error.WriteLine($t) } catch { Write-Host $t -ForegroundColor DarkGray }
+    }
+    exit $ExitCode
+}
+
+function Write-Summary {
+    param([string]$Title = 'Resumen', [string[]]$Rows = @(), [string[]]$Next = @())
+    Write-Host ''
+    Write-Line $script:Rule DarkGray
+    Write-Line "  $Title"
+    foreach ($r in $Rows) { Write-Line "    $r" }
+    if ($Next.Count -gt 0) {
+        Write-Host ''
+        Write-Line '  Próximos pasos:' DarkGray
+        foreach ($n in $Next) { Write-Line "    $n" Cyan }
+    }
+    Write-Line $script:Rule DarkGray
+    if ($script:WarnCount -gt 0) {
+        Write-Line ('  {0} advertencia(s) durante la ejecución' -f $script:WarnCount) Yellow
+    }
+    if ($null -ne $script:ScriptWatch) {
+        $script:ScriptWatch.Stop()
+        Write-Line ('  Duración total: {0}' -f (Format-Duration $script:ScriptWatch.Elapsed.TotalSeconds)) DarkGray
+    }
+    Write-Host ''
+}
+# --- fin console -------------------------------------------------------------
 
 $Namespace      = 'latiendita'
 $Overlay        = 'k8s/overlays/local'
@@ -50,6 +195,10 @@ $TotalSteps     = 8
 
 $Apps          = @('auth-service', 'user-service', 'product-service', 'order-service', 'payment-service', 'gateway')
 $StatefulSets  = @('auth-db', 'users-db', 'products-db', 'orders-db', 'payments-db', 'kafka')
+
+if (-not (Test-Path $Overlay)) {
+    Stop-Script -Message "No existe ${Overlay}: correr desde la raíz del repo." -ExitCode 1
+}
 
 Write-Header 'La Tiendita · entorno local (kind)' @(
     "clúster    : $ClusterName",
@@ -66,7 +215,7 @@ Assert-Tool -Name 'kind' -Hint 'Instalar kind (winget install Kubernetes.kind).'
 
 $daemon = Invoke-Tool 'docker' @('info', '--format', '{{.ServerVersion}}')
 if ($daemon.ExitCode -ne 0) {
-    Stop-Script -Message 'El daemon de Docker no está corriendo.' -Hint 'Iniciar Docker Desktop y reintentar.'
+    Stop-Script -Message 'El daemon de Docker no está corriendo.' -Hint 'Iniciar Docker Desktop y reintentar.' -ExitCode 2
 }
 
 # kubectl --short fue removido en 1.28: se intenta y se cae a --client.
@@ -74,10 +223,14 @@ $kVersion = Invoke-Tool 'kubectl' @('version', '--client', '--short')
 if ($kVersion.ExitCode -ne 0) { $kVersion = Invoke-Tool 'kubectl' @('version', '--client') }
 $kText = ($kVersion.Lines | Where-Object { $_ -match 'Client Version' } | Select-Object -First 1)
 if (-not $kText) { $kText = ($kVersion.Lines | Select-Object -First 1) }
+if (-not $kText) { $kText = 'desconocida' }
+$kindText = ((Invoke-Tool 'kind' @('version')).Lines | Select-Object -First 1)
+if (-not $kindText) { $kindText = 'desconocida' }
+
 $versions = @(
     ('docker  {0}' -f $daemon.Text.Trim()),
     ('kubectl {0}' -f $kText.Trim()),
-    ('kind    {0}' -f ((Invoke-Tool 'kind' @('version')).Text -split "`n" | Select-Object -First 1).Trim())
+    ('kind    {0}' -f $kindText.Trim())
 )
 foreach ($v in $versions) { Write-Note $v }
 Complete-Step 'herramientas listas'
@@ -89,23 +242,23 @@ $hasContext = @($existing.Lines) -contains $Context
 
 if (-not $hasContext) {
     Write-Note ("creando clúster '{0}' (puede tardar varios minutos la primera vez)..." -f $ClusterName)
-    $create = Invoke-Tool 'kind' @('create', 'cluster', '--name', $ClusterName)
-    if ($create.ExitCode -ne 0) {
+    & kind create cluster --name $ClusterName
+    if ($LASTEXITCODE -ne 0) {
         Stop-Script -Message ("No se pudo crear el clúster '{0}'." -f $ClusterName) `
-                    -Hint 'Revisar el log de kind arriba.'
+                    -Hint 'Revisar el log de kind arriba.' -ExitCode 3
     }
 } else {
     Write-Note ("reutilizando clúster existente '{0}'" -f $ClusterName)
     $info = Invoke-Tool 'kubectl' @('cluster-info', '--context', $Context)
     if ($info.ExitCode -ne 0) {
         Stop-Script -Message ("El clúster '{0}' existe pero no responde." -f $ClusterName) `
-                    -Hint ("Borrarlo y volver a empezar: kind delete cluster --name {0}" -f $ClusterName)
+                    -Hint ("Borrarlo y volver a empezar: kind delete cluster --name {0}" -f $ClusterName) -ExitCode 3
     }
 }
 
 $use = Invoke-Tool 'kubectl' @('config', 'use-context', $Context)
 if ($use.ExitCode -ne 0) {
-    Stop-Script -Message ("No se pudo activar el contexto '{0}'." -f $Context)
+    Stop-Script -Message ("No se pudo activar el contexto '{0}'." -f $Context) -ExitCode 3
 }
 
 $serverVersion = Invoke-Tool 'kubectl' @('version', '-o', 'jsonpath={.serverVersion.gitVersion}')
@@ -123,9 +276,13 @@ if (Test-Path $SecretsFile) {
     Complete-Step 'ya existe, no se toca'
 } else {
     if (-not (Test-Path $SecretsExample)) {
-        Stop-Script -Message ("No existe {0} ni su example." -f $SecretsFile)
+        Stop-Script -Message ("No existe {0} ni su example." -f $SecretsFile) -ExitCode 4
     }
-    Copy-Item $SecretsExample $SecretsFile
+    try {
+        Copy-Item $SecretsExample $SecretsFile -ErrorAction Stop
+    } catch {
+        Stop-Script -Message ("No se pudo crear {0}." -f $SecretsFile) -ExitCode 4
+    }
     Write-Note ("{0}  <-  {1}" -f $SecretsFile, $SecretsExample)
     Write-Warn 'secrets.env creado con valores de desarrollo: no usar fuera de este clúster.'
     Complete-Step 'creado desde el example'
@@ -133,15 +290,25 @@ if (Test-Path $SecretsFile) {
 
 # --- 4. Imágenes -------------------------------------------------------------
 Start-Step 4 $TotalSteps 'Imágenes'
+$failed = New-Object System.Collections.Generic.List[string]
 if ($SkipBuild) {
     Write-Note 'build omitido (-SkipBuild): se usan las imágenes ya presentes en Docker.'
 } else {
     $buildWatch = [System.Diagnostics.Stopwatch]::StartNew()
-    & ('{0}/build-images.ps1' -f $PSScriptRoot) -Tag $Tag
-    $buildCode = $LASTEXITCODE
+    foreach ($s in $Apps) {
+        $image = 'latiendita/{0}:{1}' -f $s, $Tag
+        Write-Host ''
+        Write-Info $image
+        & docker build -t $image "./services/$s"
+        if ($LASTEXITCODE -ne 0) {
+            $failed.Add($s)
+            Write-Warn ("build falló para '{0}' (exit code {1})" -f $s, $LASTEXITCODE)
+        }
+    }
     $buildWatch.Stop()
-    if ($buildCode -ne 0) {
-        Stop-Script -Message 'El build de imágenes falló.' -Hint 'Correr .\scripts\build-images.ps1 para ver el detalle.'
+    if ($failed.Count -gt 0) {
+        Stop-Script -Message ("Falló el build de {0} servicio(s): {1}" -f $failed.Count, ($failed -join ', ')) `
+                    -Hint 'Correr .\scripts\build-images.ps1 para ver el detalle.' -ExitCode 5
     }
     Write-Note ('build: {0}' -f (Format-Duration $buildWatch.Elapsed.TotalSeconds))
 }
@@ -151,13 +318,13 @@ foreach ($s in $Apps) {
     $check = Invoke-Tool 'docker' @('image', 'inspect', '-f', '{{.Id}}', $image)
     if ($check.ExitCode -ne 0) {
         Stop-Script -Message ("No existe la imagen '{0}'." -f $image) `
-                    -Hint ('Correr .\scripts\build-images.ps1 -Tag {0} o sacar -SkipBuild.' -f $Tag)
+                    -Hint ('Correr .\scripts\build-images.ps1 -Tag {0} o sacar -SkipBuild.' -f $Tag) -ExitCode 5
     }
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $load = Invoke-Tool 'kind' @('load', 'docker-image', $image, '--name', $ClusterName)
     $sw.Stop()
     if ($load.ExitCode -ne 0) {
-        Stop-Script -Message ("No se pudo cargar '{0}' en el clúster." -f $image) -Hint 'Revisar el log de kind arriba.'
+        Stop-Script -Message ("No se pudo cargar '{0}' en el clúster." -f $image) -Hint 'Revisar el log de kind arriba.' -ExitCode 5
     }
     Write-Ok ('{0,-26} {1}' -f $image, (Format-Duration $sw.Elapsed.TotalSeconds))
 }
@@ -168,7 +335,7 @@ Start-Step 5 $TotalSteps "Aplicar manifests ($Overlay)"
 $apply = Invoke-Tool 'kubectl' @('apply', '-k', $Overlay)
 foreach ($line in $apply.Lines) { if ($line.Trim()) { Write-Note $line } }
 if ($apply.ExitCode -ne 0) {
-    Stop-Script -Message 'kubectl apply falló.' -Hint 'Revisar el render: kubectl kustomize k8s/overlays/local'
+    Stop-Script -Message 'kubectl apply falló.' -Hint 'Revisar el render: kubectl kustomize k8s/overlays/local' -ExitCode 6
 }
 Complete-Step ('{0} recursos aplicados' -f @($apply.Lines | Where-Object { $_ -match 'configured|created|unchanged' }).Count)
 
@@ -180,7 +347,7 @@ foreach ($d in $StatefulSets) {
     $sw.Stop()
     if ($wait.ExitCode -ne 0) {
         Stop-Script -Message ("statefulset/{0} no quedó listo en {1}s." -f $d, $Timeout) `
-                    -Hint ("kubectl describe statefulset {0} -n {1}; kubectl get pods -n {1}" -f $d, $Namespace)
+                    -Hint ("kubectl describe statefulset {0} -n {1}; kubectl get pods -n {1}" -f $d, $Namespace) -ExitCode 7
     }
     Write-Ok ('{0,-16} {1}' -f $d, (Format-Duration $sw.Elapsed.TotalSeconds))
 }
@@ -194,7 +361,7 @@ foreach ($s in $Apps) {
     $sw.Stop()
     if ($wait.ExitCode -ne 0) {
         Stop-Script -Message ("deployment/{0} no quedó listo en {1}s." -f $s, $Timeout) `
-                    -Hint ("kubectl describe deployment {0} -n {1}; kubectl logs deploy/{0} -n {1} --tail=50" -f $s, $Namespace)
+                    -Hint ("kubectl describe deployment {0} -n {1}; kubectl logs deploy/{0} -n {1} --tail=50" -f $s, $Namespace) -ExitCode 7
     }
     Write-Ok ('{0,-22} {1}' -f $s, (Format-Duration $sw.Elapsed.TotalSeconds))
 }
@@ -204,7 +371,7 @@ Complete-Step ('{0}/{0} listos' -f $Apps.Count)
 Start-Step 8 $TotalSteps 'Verificación'
 $pods = Invoke-Tool 'kubectl' @('get', 'pods', '-n', $Namespace, '--no-headers')
 if ($pods.ExitCode -ne 0) {
-    Stop-Script -Message ("No se pudieron listar los pods del namespace '{0}'." -f $Namespace)
+    Stop-Script -Message ("No se pudieron listar los pods del namespace '{0}'." -f $Namespace) -ExitCode 8
 }
 
 $total = 0
@@ -221,12 +388,12 @@ foreach ($line in $pods.Lines) {
 }
 
 if ($total -eq 0) {
-    Stop-Script -Message ("El namespace '{0}' no tiene pods." -f $Namespace) -Hint ("kubectl get all -n {0}" -f $Namespace)
+    Stop-Script -Message ("El namespace '{0}' no tiene pods." -f $Namespace) -Hint ("kubectl get all -n {0}" -f $Namespace) -ExitCode 8
 }
 foreach ($p in $notReady) { Write-Warn $p }
 if ($notReady.Count -gt 0) {
     Stop-Script -Message ('{0} de {1} pods no están listos.' -f $notReady.Count, $total) `
-                -Hint ("kubectl get pods -n {0}; kubectl describe pod <pod> -n {0}" -f $Namespace)
+                -Hint ("kubectl get pods -n {0}; kubectl describe pod <pod> -n {0}" -f $Namespace) -ExitCode 8
 }
 Complete-Step ('{0}/{1} pods listos' -f $total, $total)
 
