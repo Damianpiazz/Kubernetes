@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Stack de observabilidad de La Tiendita en Kubernetes.
+#
+# Aplicación (independiente del overlay de apps porque éste fuerza
+# namespace: latiendita y pisaría el namespace de este stack):
+#
+#   kubectl apply -k k8s/observability                              # local / dev
+#   kubectl apply -k k8s/overlays/production-observability          # producción
+#
+# Los archivos de configuración no se duplican: vienen de observability/ como
+# ConfigMaps (ver observability/kustomization.yaml), que es el mismo directorio
+# que usa Docker Compose.
+namespace: latiendita-observability
+
+resources:
+  - namespace.yaml
+  - ../../observability
+  - rbac.yaml
+  - prometheus/statefulset.yaml
+  - alertmanager/deployment.yaml
+  - loki/statefulset.yaml
+  - tempo/statefulset.yaml
+  - alloy/daemonset.yaml
+  - grafana/deployment.yaml

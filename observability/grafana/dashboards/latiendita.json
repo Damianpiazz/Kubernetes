@@ -613,13 +613,13 @@
       "id": 21,
       "type": "logs",
       "title": "Application logs",
-      "description": "Structured JSON logs. Click a traceId to jump to Tempo.",
+      "description": "Structured JSON logs filtered by the $service variable. Click a traceId to jump to Tempo.",
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 43 },
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
         {
           "refId": "A",
-          "expr": "{container_name=~\".*-service-.*|.*gateway.*|.*eureka.*\"}",
+          "expr": "{application_name=~\"$service\"}",
           "queryType": "range",
           "maxLines": 500
         }

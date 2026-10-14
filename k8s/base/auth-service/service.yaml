@@ -2,6 +2,11 @@ apiVersion: v1
 kind: Service
 metadata:
   name: auth-service
+  annotations:
+    # Las usa Prometheus con kubernetes_sd (role: endpoints), ver
+    # observability/prometheus/prometheus.k8s.yml
+    prometheus.io/scrape: "true"
+    prometheus.io/path: /actuator/prometheus
   labels:
     app.kubernetes.io/name: auth-service
     app.kubernetes.io/part-of: la-tiendita

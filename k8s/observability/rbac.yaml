@@ -1,0 +1,83 @@
+# RBAC del stack de observabilidad.
+#
+# - prometheus: descubre los Services/Endpoints/Pods de las apps (namespace
+#   latiendita) con kubernetes_sd, role: endpoints.
+# - alloy: descubre los Pods de las apps y lee sus logs vía la subresource
+#   pods/log (loki.source.kubernetes), sin hostPath.
+#
+# Ambos necesitan ClusterRole porque leen recursos fuera de su propio namespace.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/part-of: la-tiendita
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: latiendita-prometheus
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/part-of: la-tiendita
+rules:
+  - apiGroups: [""]
+    resources: ["services", "endpoints", "pods", "namespaces"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: latiendita-prometheus
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/part-of: la-tiendita
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: latiendita-prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: latiendita-observability
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: alloy
+  labels:
+    app.kubernetes.io/name: alloy
+    app.kubernetes.io/part-of: la-tiendita
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: latiendita-alloy
+  labels:
+    app.kubernetes.io/name: alloy
+    app.kubernetes.io/part-of: la-tiendita
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "namespaces"]
+    verbs: ["get", "list", "watch"]
+  # Lectura de los logs de los pods (loki.source.kubernetes).
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: latiendita-alloy
+  labels:
+    app.kubernetes.io/name: alloy
+    app.kubernetes.io/part-of: la-tiendita
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: latiendita-alloy
+subjects:
+  - kind: ServiceAccount
+    name: alloy
+    namespace: latiendita-observability

@@ -14,7 +14,8 @@ common:
   storage:
     filesystem:
       chunks_directory: /loki/chunks
-      rules_directory: /loki/rules
+      # Directorio del ruler storage (tenant "fake" porque auth_enabled: false).
+      rules_directory: /etc/loki/rules
 
 schema_config:
   configs:
@@ -34,4 +35,16 @@ query_range:
         max_size_mb: 100
 
 ruler:
-  alertmanager_url: http://localhost:9093
+  alertmanager_url: http://alertmanager:9093
+  enable_alertmanager_v2: true
+  enable_api: true
+  evaluation_interval: 1m
+  # Directorio temporal de evaluación: debe ser escribible por el usuario de la imagen.
+  rule_path: /loki/rules-temp
+  ring:
+    kvstore:
+      store: inmemory
+  storage:
+    type: local
+    local:
+      directory: /etc/loki/rules

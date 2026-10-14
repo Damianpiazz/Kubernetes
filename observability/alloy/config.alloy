@@ -39,15 +39,18 @@ loki.source.docker "containers" {
 loki.process "apps" {
   stage.json {
     expressions = {
-      level       = "level",
-      application = "application_name",
-      traceId     = "traceId",
+      level            = "level",
+      application_name = "application_name",
+      traceId          = "traceId",
     }
   }
 
+  # application_name es el label que usa Tempo (tracesToLogs: service.name ->
+  # application_name) para enlazar trazas con logs.
   stage.labels {
     values = {
-      level = "level",
+      level            = "level",
+      application_name = "application_name",
     }
   }
 

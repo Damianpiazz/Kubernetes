@@ -11,3 +11,7 @@ data:
   KAFKA_BOOTSTRAP_SERVERS: kafka:9092
   PRODUCT_SERVICE_BASE_URL: http://product-service
   EUREKA_ENABLED: "false"
+  # Tracing: Alloy recibe el OTLP y lo reenvía a Tempo. Nombre FQDN porque
+  # Alloy vive en el namespace latiendita-observability (cruza namespaces).
+  OTLP_TRACING_ENDPOINT: http://alloy.latiendita-observability.svc.cluster.local:4318/v1/traces
+  TRACING_SAMPLING_PROBABILITY: "0.1"

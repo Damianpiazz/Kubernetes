@@ -1,0 +1,65 @@
+# Reglas de alerta de Prometheus - compartidas por Docker y Kubernetes.
+# Ruta de carga: /etc/prometheus/rules/*.yml (ver prometheus.yml /
+# prometheus.k8s.yml). Para agregar una regla, sumala acá y al
+# configMapGenerator "prometheus-rules" en observability/kustomization.yaml.
+groups:
+  - name: latiendita-pipeline
+    interval: 30s
+    rules:
+      # Siempre disparada: sirve para comprobar de punta a punta que
+      # Prometheus -> Alertmanager responde (si no aparece, el pipeline está roto).
+      - alert: Watchdog
+        expr: vector(1)
+        labels:
+          severity: none
+        annotations:
+          summary: "Pipeline de alertas operativo"
+          description: >-
+            Alerta siempre activa. Su presencia en Alertmanager confirma que
+            Prometheus está entregando alertas correctamente.
+
+  - name: latiendita-disponibilidad
+    rules:
+      - alert: TargetDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Target caído: {{ $labels.instance }} ({{ $labels.job }})"
+          description: >-
+            El job {{ $labels.job }} en {{ $labels.instance }} no responde hace
+            más de 2 minutos.
+
+  - name: latiendita-red
+    rules:
+      # Requiere management.metrics.tags.service en cada servicio (etiqueta "service").
+      - alert: HighErrorRate5xx
+        expr: |
+          100
+          * sum by (service) (rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+          / sum by (service) (rate(http_server_requests_seconds_count[5m]))
+          > 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Tasa de errores 5xx alta en {{ $labels.service }}"
+          description: >-
+            {{ $value | printf "%.1f" }}% de las respuestas de
+            {{ $labels.service }} son 5xx (umbral 5%).
+
+      - alert: HighLatencyP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le, service) (rate(http_server_requests_seconds_bucket[5m]))
+          ) > 1.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Latencia p95 alta en {{ $labels.service }}"
+          description: >-
+            p95 de {{ $labels.service }} = {{ $value | printf "%.2f" }}s
+            (umbral 1.5s).

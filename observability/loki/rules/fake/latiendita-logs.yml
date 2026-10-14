@@ -1,0 +1,39 @@
+# Reglas de alerta de Loki (LogQL) - compartidas por Docker y Kubernetes.
+#
+# Ruta de carga: /etc/loki/rules/fake/latiendita-logs.yml
+#   "fake" es el tenant porque auth_enabled: false (ver loki.yml).
+# El ruler las evalúa y las envía a Alertmanager (ruler.alertmanager_url).
+#
+# El selector usa application_name, que Alloy promueve a label de Loki tanto en
+# Docker como en Kubernetes (ver alloy/config.alloy y alloy/config.k8s.alloy).
+groups:
+  - name: latiendita-logs
+    interval: 1m
+    rules:
+      - alert: LatienditaErrorLogs
+        expr: |
+          sum by (application_name) (
+            rate({application_name=~".+", level=~"ERROR|FATAL"}[5m])
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Errores constantes en los logs de {{ $labels.application_name }}"
+          description: >-
+            {{ $value | printf "%.2f" }} líneas ERROR/s en
+            {{ $labels.application_name }} durante los últimos 5 minutos.
+
+      - alert: LatienditaLogsExceptions
+        expr: |
+          sum by (application_name) (
+            rate({application_name=~".+"} |~ "(?i)OutOfMemoryError|StackOverflowError|Caused by:" [5m])
+          ) > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Excepciones en los logs de {{ $labels.application_name }}"
+          description: >-
+            Aparecen excepciones no contempladas en los logs de
+            {{ $labels.application_name }} (OOM, stack overflow o causas encadenadas).

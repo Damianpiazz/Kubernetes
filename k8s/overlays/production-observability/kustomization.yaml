@@ -1,0 +1,67 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Producción del stack de observabilidad. Se aplica aparte del overlay de apps
+# (k8s/overlays/production) por el mismo motivo que en local: ese overlay fuerza
+# namespace: latiendita y acá necesitamos latiendita-observability.
+#
+#   kubectl apply -k k8s/overlays/production
+#   kubectl apply -k k8s/overlays/production-observability
+namespace: latiendita-observability
+
+resources:
+  - ../../observability
+  - ingress.yaml
+
+# Credenciales reales de Grafana. Reemplazar CHANGE-ME (no commitear).
+secretGenerator:
+  - name: grafana-admin
+    behavior: replace
+    literals:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=CHANGE-ME
+
+# Si el clúster no tiene StorageClass por defecto, declararla acá para los
+# StatefulSets (prometheus, loki, tempo) y el PVC de grafana:
+#
+# patches:
+#   - target:
+#       kind: StatefulSet
+#     patch: |-
+#       - op: add
+#         path: /spec/volumeClaimTemplates/0/spec/storageClassName
+#         value: CHANGE-ME-storageclass
+#   - target:
+#       kind: PersistentVolumeClaim
+#       name: grafana-data
+#     patch: |-
+#       - op: add
+#         path: /spec/storageClassName
+#         value: CHANGE-ME-storageclass
+
+# Las imágenes están pinneadas por tag (prom/prometheus:v3.15.0, etc.). Si el
+# clúster no tiene salida a internet o querés un registry propio, descomentar:
+#
+# images:
+#   - name: prom/prometheus
+#     newName: CHANGE-ME/prometheus
+#     newTag: v3.15.0
+#   - name: grafana/grafana
+#     newName: CHANGE-ME/grafana
+#     newTag: 13.2.3
+#   - name: grafana/loki
+#     newName: CHANGE-ME/loki
+#     newTag: 3.7.8
+#   - name: grafana/tempo
+#     newName: CHANGE-ME/tempo
+#     newTag: 2.10.8
+#   - name: grafana/alloy
+#     newName: CHANGE-ME/alloy
+#     newTag: v1.20.1
+#   - name: prom/alertmanager
+#     newName: CHANGE-ME/alertmanager
+#     newTag: v0.28.1
+#
+# Nota: Prometheus, Loki, Tempo y Grafana quedan en replicas=1 porque sus PVCs
+# son ReadWriteOnce. Para escalarlos hace falta RWX o un backend externo
+# (Thanos, Mimir, Grafana Cloud).

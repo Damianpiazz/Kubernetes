@@ -29,6 +29,7 @@ services:
       - --web.enable-lifecycle
     volumes:
       - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/rules:/etc/prometheus/rules:ro
       - prometheus_data:/prometheus
     networks:
       - backend
@@ -38,6 +39,25 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    deploy: *obs-limits
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ./observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9093/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     restart: unless-stopped
 
   tempo:
@@ -63,6 +83,7 @@ services:
     command: ["-config.file=/etc/loki/loki.yml"]
     volumes:
       - ./observability/loki/loki.yml:/etc/loki/loki.yml:ro
+      - ./observability/loki/rules:/etc/loki/rules:ro
       - loki_data:/loki
     networks:
       - backend
@@ -170,6 +191,7 @@ services:
 
 volumes:
   prometheus_data:
+  alertmanager_data:
   tempo_data:
   loki_data:
   alloy_data:
