@@ -5,9 +5,9 @@
 .DESCRIPTION
     1. Verifica docker, kubectl y kind.
     2. Crea (o reutiliza) el clúster kind y activa su contexto.
-    3. Crea k8s/overlays/local/secrets.env desde el example si no existe.
+    3. Crea k8s/apps/environments/local/secrets.env desde el example si no existe.
     4. Construye las imágenes y las carga en el clúster (kind load).
-    5. Aplica k8s/overlays/local y espera StatefulSets y Deployments.
+    5. Aplica k8s/apps/environments/local y espera StatefulSets y Deployments.
     6. Verifica que todos los pods queden listos.
 
 .PARAMETER ClusterName
@@ -33,7 +33,7 @@
     repo.
 
     Códigos de salida (idénticos a kind-up.sh):
-      1 uso incorrecta / repo sin k8s/overlays/local
+      1 uso incorrecta / repo sin k8s/apps/environments/local
       2 herramientas faltantes o daemon de Docker caído
       3 clúster no creado / contexto no activado
       4 secrets locales (falta el example o no se pudo copiar)
@@ -187,9 +187,9 @@ function Write-Summary {
 # --- fin console -------------------------------------------------------------
 
 $Namespace      = 'latiendita'
-$Overlay        = 'k8s/overlays/local'
-$SecretsFile    = 'k8s/overlays/local/secrets.env'
-$SecretsExample = 'k8s/overlays/local/secrets.env.example'
+$Overlay        = 'k8s/apps/environments/local'
+$SecretsFile    = 'k8s/apps/environments/local/secrets.env'
+$SecretsExample = 'k8s/apps/environments/local/secrets.env.example'
 $Context        = 'kind-{0}' -f $ClusterName
 $TotalSteps     = 8
 
@@ -335,7 +335,7 @@ Start-Step 5 $TotalSteps "Aplicar manifests ($Overlay)"
 $apply = Invoke-Tool 'kubectl' @('apply', '-k', $Overlay)
 foreach ($line in $apply.Lines) { if ($line.Trim()) { Write-Note $line } }
 if ($apply.ExitCode -ne 0) {
-    Stop-Script -Message 'kubectl apply falló.' -Hint 'Revisar el render: kubectl kustomize k8s/overlays/local' -ExitCode 6
+    Stop-Script -Message 'kubectl apply falló.' -Hint 'Revisar el render: kubectl kustomize k8s/apps/environments/local' -ExitCode 6
 }
 Complete-Step ('{0} recursos aplicados' -f @($apply.Lines | Where-Object { $_ -match 'configured|created|unchanged' }).Count)
 

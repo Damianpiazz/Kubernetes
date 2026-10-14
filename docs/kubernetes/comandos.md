@@ -77,9 +77,9 @@ curl http://localhost:8080/actuator/health/readiness     # status: UP
 
 | Comando | Para qué |
 |---|---|
-| `kubectl apply -k k8s/overlays/local` | Aplicar los manifiestos (idempotente) |
-| `kubectl diff -k k8s/overlays/local` | **Ver qué cambiaría antes de aplicar** (exit 1 si hay diff) |
-| `kubectl kustomize k8s/overlays/local` | Renderizar los manifiestos finales sin tocar el clúster |
+| `kubectl apply -k k8s/apps/environments/local` | Aplicar los manifiestos (idempotente) |
+| `kubectl diff -k k8s/apps/environments/local` | **Ver qué cambiaría antes de aplicar** (exit 1 si hay diff) |
+| `kubectl kustomize k8s/apps/environments/local` | Renderizar los manifiestos finales sin tocar el clúster |
 | `kubectl rollout status deploy/gateway -n latiendita --timeout=120s` | Esperar a que termine el rollout |
 | `kubectl rollout status sts/kafka -n latiendita` | Lo mismo para StatefulSets |
 | `kubectl rollout history deploy/gateway -n latiendita` | Historial de revisiones |
@@ -114,10 +114,10 @@ curl http://localhost:8080/actuator/health/readiness     # status: UP
 | `scripts/install-tools.sh --check` (o `install-tools.ps1 -Check`) | Verifica docker, kubectl, kind y git; sin `--check` instala lo que falte |
 | `scripts/kind-up.sh` (o `kind-up.ps1`) | Entorno local completo: clúster kind, secrets, imágenes, manifests y pods listos |
 | `scripts/build-images.sh --tag dev` (o `build-images.ps1 -Tag dev`) | Construye `latiendita/<servicio>:<tag>` de los seis servicios |
-| `.\scripts\deploy.sh -s k8s/overlays/local/secrets.env k8s/overlays/local` | Deploy idempotente completo (valida secretos, aplica, espera) |
+| `.\scripts\deploy.sh -s k8s/apps/environments/local/secrets.env k8s/apps/environments/local` | Deploy idempotente completo (valida secretos, aplica, espera) |
 | `.\scripts\deploy.sh ... --logs gateway --log-tail 50` | Deploy + tail de logs al final |
 | `.\scripts\deploy.sh ... --timeout 120` | Cambiar el timeout de espera (default 300s, **por workload**) |
-| `.\scripts\deploy.sh -s k8s/overlays/local/secrets.env k8s/observability` | Deploy idempotente del stack de observabilidad |
+| `.\scripts\deploy.sh -s k8s/apps/environments/local/secrets.env k8s/observability/environments/local` | Deploy idempotente del stack de observabilidad |
 | `kubectl rollout restart sts/prometheus sts/loki sts/tempo -n latiendita-observability` | Recargar config de los observables (ConfigMaps sin hash) |
 | `kubectl get pvc -n latiendita` | Volumes persistentos de los StatefulSets |
 | `kubectl exec -n latiendita auth-db-0 -- psql -U auth -d auth -c '\dt'` | Verificar tablas creadas por Hibernate |
@@ -138,15 +138,15 @@ Stack completo en su propio namespace: **Prometheus** (métricas + alertas), **A
 (recepción/deduplicación de alertas), **Loki** (logs + ruler), **Tempo** (trazas), **Alloy**
 (agente que junta logs y recibe OTLP) y **Grafana** (dashboard RED + enlaces trazas↔logs).
 
-La config vive en `observability/` y se comparte con Docker Compose: el mismo `loki.yml`,
+La config vive en `config/observability/` y se comparte con Docker Compose: el mismo `loki.yml`,
 `tempo.yml`, `datasources.yml` y dashboard se usan en ambos entornos. En Kubernetes se
-embeben como ConfigMaps vía `observability/kustomization.yaml`.
+embeben como ConfigMaps vía `config/observability/kustomization.yaml`.
 
 **Desplegar**
 
 ```powershell
-kubectl apply -k k8s/observability                         # local / dev
-kubectl apply -k k8s/overlays/production-observability     # producción (ingress + secretos)
+kubectl apply -k k8s/observability/environments/local                         # local / dev
+kubectl apply -k k8s/observability/environments/production     # producción (ingress + secretos)
 ```
 
 `kind-up.ps1` no lo toca: el stack se aplica aparte, así se pueden desplegar y
@@ -186,7 +186,7 @@ Los ConfigMaps se generan sin hash (`disableNameSuffixHash`) para poder inspecci
 así que después de tocar un archivo hay que reiniciar el workload que lo monta:
 
 ```powershell
-kubectl apply -k k8s/observability
+kubectl apply -k k8s/observability/environments/local
 kubectl rollout restart deploy/grafana deploy/alertmanager -n latiendita-observability
 kubectl rollout restart sts/prometheus sts/loki sts/tempo -n latiendita-observability
 kubectl rollout restart ds/alloy -n latiendita-observability
@@ -196,12 +196,13 @@ kubectl rollout restart ds/alloy -n latiendita-observability
 
 | Archivo | Qué define |
 |---|---|
-| `observability/<componente>/` | Config compartida Docker + Kubernetes (misma fuente de verdad) |
-| `observability/kustomization.yaml` | Los ConfigMaps anteriores listos para kustomize |
-| `k8s/observability/` | Workloads, Services, PVCs y RBAC del stack |
-| `k8s/overlays/production-observability/` | Ingress de Grafana + secretos de producción |
-| `k8s/base/<servicio>/service.yaml` | Anotaciones `prometheus.io/*` con las que Prometheus descubre los targets |
-| `k8s/base/<servicio>/configmap.yaml` | `OTLP_TRACING_ENDPOINT`: apps → Alloy → Tempo |
+| `config/observability/<componente>/` | Config compartida Docker + Kubernetes (misma fuente de verdad) |
+| `config/observability/kustomization.yaml` | Los ConfigMaps anteriores listos para kustomize |
+| `k8s/observability/base/` | Workloads, Services, PVCs y RBAC del stack |
+| `k8s/observability/environments/local/` | Punto de entrada local (secretos de Grafana de desarrollo) |
+| `k8s/observability/environments/production/` | Ingress de Grafana + secretos de producción |
+| `k8s/apps/base/<servicio>/service.yaml` | Anotaciones `prometheus.io/*` con las que Prometheus descubre los targets |
+| `k8s/apps/base/<servicio>/configmap.yaml` | `OTLP_TRACING_ENDPOINT`: apps → Alloy → Tempo |
 
 ## 9. Comandos destructivos — usar con cuidado
 
@@ -210,7 +211,7 @@ kubectl rollout restart ds/alloy -n latiendita-observability
 | Comando | Riesgo | Alternativa segura |
 |---|---|---|
 | `kubectl delete pod <pod> -n latiendita` | Mata el pod (lo recrea el controller) | `kubectl rollout restart deploy/<x> -n latiendita` |
-| `kubectl delete -k k8s/overlays/local` | Borra todo el namespace | `kubectl scale deploy/<x> --replicas=0` para pausar |
+| `kubectl delete -k k8s/apps/environments/local` | Borra todo el namespace | `kubectl scale deploy/<x> --replicas=0` para pausar |
 | `kubectl drain <node> --ignore-daemonsets` | Saca pods del nodo (requiere --force si hay PV) | `kubectl cordon <node>` para evitar nuevos pods |
 | `kubectl scale deploy/gateway --replicas=0 -n latiendita` | Corta el tráfico | `kubectl rollout restart` para un bounce |
 

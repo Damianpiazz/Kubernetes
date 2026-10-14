@@ -253,9 +253,9 @@ Reglas:
 |---|---|
 | `test` | Tests automatizados (Testcontainers PostgreSQL + EmbeddedKafka; `MercadoPagoAdapter` y `OrderClient` mockeados con `@MockitoBean`; relay congelado con `poll-interval-ms=600000`) |
 | `local` | Desarrollo con `docker compose` *(pendiente)* |
-| `k8s` | Despliegue en Kubernetes: manifiestos en `k8s/base/payment-service` + overlays. Sin perfil `application-k8s.properties`; la config se inyecta por ConfigMap y Secret |
+| `k8s` | Despliegue en Kubernetes: manifiestos en `k8s/apps/base/payment-service` + environments. Sin perfil `application-k8s.properties`; la config se inyecta por ConfigMap y Secret |
 
-> **Kubernetes y Eureka**: en k8s este servicio corre con `EUREKA_ENABLED=false` (ver `k8s/base/payment-service/configmap.yaml`). No hay registro en Eureka ni descubrimiento `lb://`: el tráfico entra por el Gateway, que apunta a una URL directa (`PAYMENT_SERVICE_BASE_URL=http://payment-service`), y este servicio llama a `order-service` vía `ORDER_SERVICE_BASE_URL=http://order-service`. `eureka-server` **no se despliega** en el clúster (solo aplica a desarrollo local).
+> **Kubernetes y Eureka**: en k8s este servicio corre con `EUREKA_ENABLED=false` (ver `k8s/apps/base/payment-service/configmap.yaml`). No hay registro en Eureka ni descubrimiento `lb://`: el tráfico entra por el Gateway, que apunta a una URL directa (`PAYMENT_SERVICE_BASE_URL=http://payment-service`), y este servicio llama a `order-service` vía `ORDER_SERVICE_BASE_URL=http://order-service`. `eureka-server` **no se despliega** en el clúster (solo aplica a desarrollo local).
 
 > No existe `application-{profile}.properties`: la config de test se inyecta por anotaciones.
 

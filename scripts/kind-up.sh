@@ -8,13 +8,13 @@ set -euo pipefail
 #
 #   1. Verifica docker, kubectl y kind.
 #   2. Crea (o reutiliza) el clúster kind y activa su contexto.
-#   3. Crea k8s/overlays/local/secrets.env desde el example si no existe.
+#   3. Crea k8s/apps/environments/local/secrets.env desde el example si no existe.
 #   4. Construye las imágenes y las carga en el clúster (kind load).
-#   5. Aplica k8s/overlays/local y espera StatefulSets y Deployments.
+#   5. Aplica k8s/apps/environments/local y espera StatefulSets y Deployments.
 #   6. Verifica que todos los pods queden listos.
 #
 # Contrato de códigos de salida (idéntico al de kind-up.ps1):
-#   1  uso incorrecta / repo sin k8s/overlays/local
+#   1  uso incorrecta / repo sin k8s/apps/environments/local
 #   2  herramientas faltantes o daemon de Docker caído
 #   3  clúster no creado / contexto no activado
 #   4  secrets locales (falta el example o no se pudo copiar)
@@ -190,9 +190,9 @@ if (( $# > 0 )); then usage >&2; fail "argumento inesperado: $1"; fi
 [[ "$TIMEOUT" =~ ^[0-9]+$ ]] || fail "--timeout debe ser un número" 1
 
 NAMESPACE="latiendita"
-OVERLAY="k8s/overlays/local"
-SECRETS_FILE="k8s/overlays/local/secrets.env"
-SECRETS_EXAMPLE="k8s/overlays/local/secrets.env.example"
+OVERLAY="k8s/apps/environments/local"
+SECRETS_FILE="k8s/apps/environments/local/secrets.env"
+SECRETS_EXAMPLE="k8s/apps/environments/local/secrets.env.example"
 CONTEXT="kind-${CLUSTER_NAME}"
 TOTAL_STEPS=8
 

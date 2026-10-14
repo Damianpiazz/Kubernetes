@@ -1,0 +1,52 @@
+# Prometheus en Kubernetes.
+#
+# Diferencia con la variante de Docker (prometheus/prometheus.yml): los targets
+# no están en una lista estática sino que se descubren con la API de Kubernetes
+# (kubernetes_sd, role: endpoints) filtrando por la anotación prometheus.io/scrape
+# que declaran los Services en k8s/apps/base/<servicio>/service.yaml.
+#
+# Importante: NO se crea una etiqueta "service" en los relabel_configs. La app ya
+# expone su propia etiqueta "service" (management.metrics.tags.service) y
+# Prometheus renombraría la de la métrica a exported_service, rompiendo el
+# dashboard RED.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        # Mismo namespace (latiendita-observability): el nombre corto alcanza.
+        - targets: ["alertmanager:9093"]
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: latiendita
+    metrics_path: /actuator/prometheus
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names: [latiendita]
+    relabel_configs:
+      # Solo los servicios marcados para scrapeo.
+      - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+        action: keep
+        regex: "true"
+      # Path propio del actuator, si el Service lo declara.
+      - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: "(.+)"
+      # Etiquetas de contexto útiles para debuggear.
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_service_name]
+        target_label: k8s_service

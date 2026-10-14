@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+  annotations:
+    # Las usa Prometheus con kubernetes_sd (role: endpoints), ver
+    # config/observability/prometheus/prometheus.k8s.yml
+    prometheus.io/scrape: "true"
+    prometheus.io/path: /actuator/prometheus
+  labels:
+    app.kubernetes.io/name: order-service
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: order-service
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

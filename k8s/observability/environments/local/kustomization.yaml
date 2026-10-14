@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Entorno local (kind / k3d) del stack de observabilidad.
+#
+#   scripts/kind-up.ps1  (o)  kubectl apply -k k8s/observability/environments/local
+#
+# Hoy no agrega patches sobre la base: existe para que todos los stacks tengan
+# el mismo punto de entrada (k8s/<stack>/environments/<entorno>) y para acá
+# vivan las credenciales de desarrollo de Grafana, que no corresponden a
+# config/observability (ese directorio es configuración compartida con Docker).
+namespace: latiendita-observability
+
+resources:
+  - ../../base
+
+# Credenciales de DESARROLLO. En producción se reemplazan en
+# k8s/observability/environments/production.
+secretGenerator:
+  - name: grafana-admin
+    literals:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+
+generatorOptions:
+  disableNameSuffixHash: true

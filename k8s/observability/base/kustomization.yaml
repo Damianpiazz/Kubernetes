@@ -1,0 +1,30 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Stack de observabilidad de La Tiendita en Kubernetes.
+#
+# Este directorio es la capa base: manifiestos neutrales, sin credenciales ni
+# ingress. NO se aplica directamente; el punto de entrada siempre es un
+# environment (los secretos de Grafana se generan ahí):
+#
+#   kubectl apply -k k8s/observability/environments/local        # local / dev
+#   kubectl apply -k k8s/observability/environments/production   # producción
+#
+# Se mantiene en su propio stack (con namespace latiendita-observability)
+# porque k8s/apps fuerza namespace: latiendita y pisaría el de este stack.
+#
+# Los archivos de configuración no se duplican: vienen de config/observability
+# como ConfigMaps (ver config/observability/kustomization.yaml), que es el
+# mismo directorio que monta Docker Compose.
+namespace: latiendita-observability
+
+resources:
+  - namespace.yaml
+  - ../../../config/observability
+  - rbac.yaml
+  - prometheus/statefulset.yaml
+  - alertmanager/deployment.yaml
+  - loki/statefulset.yaml
+  - tempo/statefulset.yaml
+  - alloy/daemonset.yaml
+  - grafana/deployment.yaml

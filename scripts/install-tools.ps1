@@ -560,5 +560,5 @@ Write-Summary 'Instalación verificada' -Rows @(
     "modo        : $Mode"
 ) -Next @(
     'scripts\kind-up.ps1  (o scripts/kind-up.sh) para levantar el entorno',
-    'scripts\deploy.ps1 k8s/overlays/local  (o deploy.sh) para aplicar manifests'
+    'scripts\deploy.ps1 k8s/apps/environments/local  (o deploy.sh) para aplicar manifests'
 )

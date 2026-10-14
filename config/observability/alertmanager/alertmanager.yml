@@ -1,0 +1,44 @@
+# Alertmanager - compartido por Docker (compose.observability.yaml) y Kubernetes
+# (k8s/observability/base). Ambos entornos resuelven el nombre "alertmanager" dentro
+# de su propia red/namespace.
+#
+# Por defecto todo cae en el receiver "null": un receiver SIN integraciones que
+# recibe, deduplica y descarta la alerta. Así el stack levanta verde y las
+# alertas se pueden ver en la UI de Alertmanager / en Grafana sin spamear a
+# nadie.
+#
+# Para notificar de verdad: agregá un receiver (slack_configs / email_configs /
+# webhook_configs / pagerduty_configs) y apuntalo desde route.receiver o desde
+# una sub-ruta con matchers.
+
+route:
+  receiver: "null"
+  group_by: ["alertname", "severity"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    # Las críticas se agrupan más rápido y se reenvían más seguido.
+    - matchers:
+        - severity = "critical"
+      receiver: "null"
+      group_wait: 10s
+      repeat_interval: 1h
+
+receivers:
+  # Blackhole: sin integraciones = sin notificaciones.
+  - name: "null"
+
+  # Ejemplo para habilitar notificaciones:
+  # - name: "oncall"
+  #   webhook_configs:
+  #     - url: "https://tu-endpoint.example.com/alerts"
+  #       send_resolved: true
+
+inhibit_rules:
+  # Una alerta crítica silencia la warning del mismo alerta.
+  - source_matchers:
+      - severity = "critical"
+    target_matchers:
+      - severity = "warning"
+    equal: ["alertname"]

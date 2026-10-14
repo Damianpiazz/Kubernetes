@@ -526,7 +526,7 @@ done
 
 NEXT_STEPS=(
   "scripts/kind-up.sh     (o .\\scripts\\kind-up.ps1) para levantar el entorno"
-  "scripts/deploy.sh k8s/overlays/local   (o deploy.ps1) para aplicar manifests"
+  "scripts/deploy.sh k8s/apps/environments/local   (o deploy.ps1) para aplicar manifests"
 )
 summary "Instalación verificada" \
   "herramientas: docker, kubectl, kind (obligatorias) + git (recomendada)" \

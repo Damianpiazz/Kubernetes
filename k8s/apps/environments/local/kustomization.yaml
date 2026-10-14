@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Entorno local (kind / k3d): aplicación + tier de datos dentro del clúster.
+#
+#   scripts/kind-up.ps1  (o)  kubectl apply -k k8s/apps/environments/local
+#
+# Regla del repo: nunca se aplica k8s/apps/base directamente; el punto de
+# entrada siempre es un environment, porque los secretos se generan acá.
+namespace: latiendita
+
+resources:
+  - ../../base
+  # Tier de datos SOLO para este entorno: en producción las bases de datos y
+  # Kafka son servicios gestionados (ver el configMapGenerator del overlay de
+  # producción, que sobrescribe SPRING_DATASOURCE_URL y KAFKA_BOOTSTRAP_SERVERS).
+  - ../../../data/base
+
+secretGenerator:
+  - name: latiendita-secrets
+    envs:
+      - secrets.env
+
+generatorOptions:
+  disableNameSuffixHash: true

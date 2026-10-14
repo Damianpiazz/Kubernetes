@@ -70,7 +70,7 @@ Sin Eureka, todo puede correr igualmente: el Gateway con `EUREKA_ENABLED=false` 
 |---|---|
 | `test` | `contextLoads` (arranque del registry) |
 | `local` | Desarrollo con `docker compose` *(pendiente)* |
-| `k8s` | **No se despliega en Kubernetes**: en k8s no hay registro/descubrimiento — todos los servicios corren con `EUREKA_ENABLED=false` y el Gateway enruta con URLs directas (`*_SERVICE_BASE_URL`, ver `k8s/base/*/configmap.yaml`) |
+| `k8s` | **No se despliega en Kubernetes**: en k8s no hay registro/descubrimiento — todos los servicios corren con `EUREKA_ENABLED=false` y el Gateway enruta con URLs directas (`*_SERVICE_BASE_URL`, ver `k8s/apps/base/*/configmap.yaml`) |
 
 ### 5.3 Recursos Kubernetes (orientativo)
 

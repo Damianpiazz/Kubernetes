@@ -18,10 +18,10 @@
     Ver: scripts/deploy.ps1 -h
 
 .EXAMPLE
-    ./deploy.ps1 k8s/overlays/local
+    ./deploy.ps1 k8s/apps/environments/local
 
 .EXAMPLE
-    ./deploy.ps1 -s k8s/overlays/local/secrets.env --dry-run k8s/overlays/local
+    ./deploy.ps1 -s k8s/apps/environments/local/secrets.env --dry-run k8s/apps/environments/local
 
 .NOTES
     No declara param(): los argumentos se leen crudos de $args para replicar

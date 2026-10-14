@@ -24,7 +24,7 @@ Todas las rutas son relativas a la raíz del Gateway (ej. `http://gateway:8080`)
 | `/api/webhooks/**` | `paymentService` | No (pública) | Webhook de MP: firma HMAC propia |
 | `/actuator/health/**`, `/actuator/prometheus`, `/actuator/info` | Gateway local | No (pública) | El resto de `/actuator/**` (ej. `metrics`) exige JWT |
 
-El destino por defecto es `lb://<serviceId>` (load balancing vía Eureka); se puede sobreescribir por variable (`AUTH_SERVICE_BASE_URL`, etc.) con una URL directa. **En k8s no hay Eureka**: el ConfigMap (`k8s/base/gateway/configmap.yaml`) fija `EUREKA_ENABLED=false` y define todas las `*_SERVICE_BASE_URL` apuntando a los Services del clúster (`http://auth-service`, etc.).
+El destino por defecto es `lb://<serviceId>` (load balancing vía Eureka); se puede sobreescribir por variable (`AUTH_SERVICE_BASE_URL`, etc.) con una URL directa. **En k8s no hay Eureka**: el ConfigMap (`k8s/apps/base/gateway/configmap.yaml`) fija `EUREKA_ENABLED=false` y define todas las `*_SERVICE_BASE_URL` apuntando a los Services del clúster (`http://auth-service`, etc.).
 
 | Método | Ruta | Descripción | Auth |
 |---|---|---|---|
@@ -121,7 +121,7 @@ Formato **ProblemDetail (RFC 7807)**, emitido por `GatewayErrorController` (mism
 |---|---|
 | `test` | Tests automatizados (Eureka deshabilitado, rutas hacia un stub HTTP del JDK, `jwt.secret` de prueba) |
 | `local` | Desarrollo con `docker compose` *(pendiente)* |
-| `k8s` | Despliegue en Kubernetes: manifiestos en `k8s/base/gateway` + overlays. Sin perfil `application-k8s.properties`; la config se inyecta por ConfigMap (`EUREKA_ENABLED=false`, `*_SERVICE_BASE_URL` directas) y Secret |
+| `k8s` | Despliegue en Kubernetes: manifiestos en `k8s/apps/base/gateway` + environments. Sin perfil `application-k8s.properties`; la config se inyecta por ConfigMap (`EUREKA_ENABLED=false`, `*_SERVICE_BASE_URL` directas) y Secret |
 
 ### 5.3 Recursos Kubernetes (orientativo)
 

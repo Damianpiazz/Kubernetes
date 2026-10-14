@@ -156,9 +156,9 @@ No hay relaciones JPA (`@ManyToOne`) en este servicio: se mantiene el desacoplam
 |---|---|
 | `test` | Tests automatizados (Testcontainers PostgreSQL; config por anotaciones) |
 | `local` | Desarrollo con `docker compose` *(pendiente)* |
-| `k8s` | Despliegue en Kubernetes: manifiestos en `k8s/base/product-service` + overlays. Sin perfil `application-k8s.properties`; la config se inyecta por ConfigMap y Secret |
+| `k8s` | Despliegue en Kubernetes: manifiestos en `k8s/apps/base/product-service` + environments. Sin perfil `application-k8s.properties`; la config se inyecta por ConfigMap y Secret |
 
-> **Kubernetes y Eureka**: en k8s este servicio corre con `EUREKA_ENABLED=false` (ver `k8s/base/product-service/configmap.yaml`). No hay registro en Eureka ni descubrimiento `lb://`: el tráfico entra por el Gateway, que apunta a URLs directas (`PRODUCT_SERVICE_BASE_URL=http://product-service`). `eureka-server` **no se despliega** en el clúster (solo aplica a desarrollo local).
+> **Kubernetes y Eureka**: en k8s este servicio corre con `EUREKA_ENABLED=false` (ver `k8s/apps/base/product-service/configmap.yaml`). No hay registro en Eureka ni descubrimiento `lb://`: el tráfico entra por el Gateway, que apunta a URLs directas (`PRODUCT_SERVICE_BASE_URL=http://product-service`). `eureka-server` **no se despliega** en el clúster (solo aplica a desarrollo local).
 
 > No existe `application-{profile}.properties`: la config de test se inyecta por anotaciones (`@Import(TestcontainersConfiguration.class)`).
 

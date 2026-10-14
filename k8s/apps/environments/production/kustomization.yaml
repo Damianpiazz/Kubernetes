@@ -1,0 +1,87 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Entorno de producción de la aplicación.
+#
+#   scripts/deploy.sh k8s/apps/environments/production
+#   kubectl apply -k k8s/observability/environments/production   (aparte: otro namespace)
+#
+# NO incluye k8s/data/base: en producción las bases de datos y Kafka son
+# servicios gestionados y sus endpoints se inyectan abajo (configMapGenerator).
+namespace: latiendita
+
+resources:
+  - ../../base
+  - ingress.yaml
+  - pdb.yaml
+
+# Reemplazar CHANGE-ME por el registry real y un tag inmutable (SHA de commit o version).
+images:
+  - name: latiendita/auth-service
+    newName: CHANGE-ME/latiendita/auth-service
+    newTag: CHANGE-ME
+  - name: latiendita/user-service
+    newName: CHANGE-ME/latiendita/user-service
+    newTag: CHANGE-ME
+  - name: latiendita/product-service
+    newName: CHANGE-ME/latiendita/product-service
+    newTag: CHANGE-ME
+  - name: latiendita/order-service
+    newName: CHANGE-ME/latiendita/order-service
+    newTag: CHANGE-ME
+  - name: latiendita/payment-service
+    newName: CHANGE-ME/latiendita/payment-service
+    newTag: CHANGE-ME
+  - name: latiendita/gateway
+    newName: CHANGE-ME/latiendita/gateway
+    newTag: CHANGE-ME
+
+replicas:
+  - name: auth-service
+    count: 2
+  - name: user-service
+    count: 2
+  - name: product-service
+    count: 2
+  - name: order-service
+    count: 2
+  - name: payment-service
+    count: 2
+  - name: gateway
+    count: 2
+
+# Endpoints de bases de datos y Kafka EXTERNOS (gestionados). Reemplazar CHANGE-ME.
+configMapGenerator:
+  - name: auth-service-config
+    behavior: merge
+    literals:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://CHANGE-ME.db.example.com:5432/auth
+      - SPRING_DATASOURCE_USERNAME=CHANGE-ME
+      - KAFKA_BOOTSTRAP_SERVERS=CHANGE-ME.kafka.example.com:9092
+  - name: user-service-config
+    behavior: merge
+    literals:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://CHANGE-ME.db.example.com:5432/users
+      - SPRING_DATASOURCE_USERNAME=CHANGE-ME
+      - KAFKA_BOOTSTRAP_SERVERS=CHANGE-ME.kafka.example.com:9092
+  - name: product-service-config
+    behavior: merge
+    literals:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://CHANGE-ME.db.example.com:5432/products
+      - SPRING_DATASOURCE_USERNAME=CHANGE-ME
+  - name: order-service-config
+    behavior: merge
+    literals:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://CHANGE-ME.db.example.com:5432/orders
+      - SPRING_DATASOURCE_USERNAME=CHANGE-ME
+      - KAFKA_BOOTSTRAP_SERVERS=CHANGE-ME.kafka.example.com:9092
+  - name: payment-service-config
+    behavior: merge
+    literals:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://CHANGE-ME.db.example.com:5432/payments
+      - SPRING_DATASOURCE_USERNAME=CHANGE-ME
+      - KAFKA_BOOTSTRAP_SERVERS=CHANGE-ME.kafka.example.com:9092
+  - name: gateway-config
+    behavior: merge
+    literals:
+      - CORS_ALLOWED_ORIGINS=https://CHANGE-ME.example.com
