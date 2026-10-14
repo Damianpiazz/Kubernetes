@@ -22,7 +22,8 @@ spec:
         app.kubernetes.io/name: product-service
         app.kubernetes.io/part-of: la-tiendita
     spec:
-      terminationGracePeriodSeconds: 30
+      # 5s de preStop (sleep) + hasta 30s de drenaje graceful + 5s de margen.
+      terminationGracePeriodSeconds: 40
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001
@@ -30,6 +31,16 @@ spec:
         fsGroup: 1001
         seccompProfile:
           type: RuntimeDefault
+      # Repartir las réplicas entre nodos para que el PDB valga contra una
+      # caída de nodo. ScheduleAnyway: prioriza pero nunca bloquea (clúster
+      # de 1 nodo sigue agendando; local tiene 1 réplica y no se afecta).
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: product-service
       containers:
         - name: app
           image: latiendita/product-service:dev
@@ -46,6 +57,13 @@ spec:
                 secretKeyRef:
                   name: latiendita-secrets
                   key: PRODUCTS_DB_PASSWORD
+          lifecycle:
+            preStop:
+              exec:
+                # Retira el pod de los Endpoints y da margen a que kube-proxy /
+                # el gateway dejen de enrutarle antes de que Spring arranque el
+                # shutdown (los readiness gates no cubren esto).
+                command: ["sh", "-c", "sleep 5"]
           resources:
             requests:
               cpu: 250m
