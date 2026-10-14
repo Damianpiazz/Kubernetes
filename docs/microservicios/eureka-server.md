@@ -70,7 +70,7 @@ Sin Eureka, todo puede correr igualmente: el Gateway con `EUREKA_ENABLED=false` 
 |---|---|
 | `test` | `contextLoads` (arranque del registry) |
 | `local` | Desarrollo con `docker compose` *(pendiente)* |
-| `k8s` | Despliegue en Kubernetes *(pendiente)* |
+| `k8s` | **No se despliega en Kubernetes**: en k8s no hay registro/descubrimiento — todos los servicios corren con `EUREKA_ENABLED=false` y el Gateway enruta con URLs directas (`*_SERVICE_BASE_URL`, ver `k8s/base/*/configmap.yaml`) |
 
 ### 5.3 Recursos Kubernetes (orientativo)
 
@@ -97,7 +97,7 @@ El registry no llama a ningún servicio (solo health check opcional de las insta
 |---|---|---|---|---|
 | — | — | No tiene dependencias externas | — | — |
 
-Si el registry cae: los clientes conservan su caché de registro (el Gateway sigue enrutando) y los servicios siguen atendiendo; lo que no funciona es descubrir instancias nuevas ni darse de baja. Por eso en k8s conviene un `replicas: 2` con peer discovery.
+Si el registry cae: los clientes conservan su caché de registro (el Gateway sigue enrutando) y los servicios siguen atendiendo; lo que no funciona es descubrir instancias nuevas ni darse de baja. Por eso, si se llegara a desplegar en k8s, convendría un `replicas: 2` con peer discovery. **Hoy no aplica**: el despliegue en k8s no incluye este servicio (descubrimiento vía DNS de los Services del clúster).
 
 ---
 

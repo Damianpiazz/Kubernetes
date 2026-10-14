@@ -3,6 +3,9 @@
 Referencia rápida de `kubectl` para operar el clúster de La Tiendita. Todos los ejemplos
 asumen el namespace `latiendita` (recordá pasarlo siempre con `-n latiendita`).
 
+La observabilidad (Prometheus, Loki, Tempo, Grafana, Alloy y Alertmanager) corre en su
+propio namespace: **`latiendita-observability`** → sección 8.
+
 **Contexto actual**: clúster kind `latiendita-dev` → contexto `kind-latiendita-dev`.
 
 > **Nota**: el clúster kind no trae `metrics-server`, por lo que `kubectl top` no funciona
@@ -15,6 +18,7 @@ asumen el namespace `latiendita` (recordá pasarlo siempre con `-n latiendita`).
 
 ```powershell
 kubectl get pods -n latiendita                          # 12 pods Running 1/1
+kubectl get pods -n latiendita-observability            # 6 workloads 1/1 (observabilidad)
 kubectl get events -n latiendita --sort-by=.metadata.creationTimestamp
 kubectl port-forward svc/gateway 8080:80 -n latiendita  # en otra terminal
 curl http://localhost:8080/actuator/health/readiness     # status: UP
@@ -92,23 +96,114 @@ curl http://localhost:8080/actuator/health/readiness     # status: UP
 | `kubectl get endpoints gateway -n latiendita` | Verificar que el Service tiene endpoints reales |
 | `kubectl port-forward svc/gateway 8080:80 -n latiendita` | Exponer el gateway localmente |
 | `curl http://localhost:8080/actuator/health/readiness` | Health check del gateway |
-| `curl http://localhost:8080/api/products` | Catálogo sin auth (público) |
+| `curl http://localhost:8080/api/products -H "Authorization: Bearer <token>"` | Catálogo (requiere JWT; sin token → `401`) |
 | `curl -X POST http://localhost:8080/api/auth/register -H "Content-Type: application/json" -d '{"email":"test@test.com","username":"testuser","password":"Passw0rd!"}'` | Registrar usuario |
 | `curl -X POST http://localhost:8080/api/auth/login -H "Content-Type: application/json" -d '{"email":"test@test.com","password":"Passw0rd!"}'` | Login → devuelve JWT |
 | `curl http://localhost:8080/api/orders -H "Authorization: Bearer <token>"` | Probar endpoint protegido |
 
 ## 7. Infraestructura del repo
 
+> Cada script existe en dos versiones con el mismo nombre, las mismas opciones
+> y los mismos códigos de salida: `scripts/<nombre>.sh` (bash: Linux, macOS y
+> Windows vía Git Bash/WSL) y `scripts/<nombre>.ps1` (PowerShell 5.1+). Todos
+> son autocontenidos: no dependen de librerías ni de otros scripts del repo.
+> Si los `.sh` no tienen bit de ejecución, correrlos como `bash scripts/<nombre>.sh`.
+
 | Comando | Para qué |
 |---|---|
+| `scripts/install-tools.sh --check` (o `install-tools.ps1 -Check`) | Verifica docker, kubectl, kind y git; sin `--check` instala lo que falte |
+| `scripts/kind-up.sh` (o `kind-up.ps1`) | Entorno local completo: clúster kind, secrets, imágenes, manifests y pods listos |
+| `scripts/build-images.sh --tag dev` (o `build-images.ps1 -Tag dev`) | Construye `latiendita/<servicio>:<tag>` de los seis servicios |
 | `.\scripts\deploy.sh -s k8s/overlays/local/secrets.env k8s/overlays/local` | Deploy idempotente completo (valida secretos, aplica, espera) |
 | `.\scripts\deploy.sh ... --logs gateway --log-tail 50` | Deploy + tail de logs al final |
-| `.\scripts\deploy.sh ... --timeout 120` | Cambiar el timeout de espera (default 300s) |
+| `.\scripts\deploy.sh ... --timeout 120` | Cambiar el timeout de espera (default 300s, **por workload**) |
+| `.\scripts\deploy.sh -s k8s/overlays/local/secrets.env k8s/observability` | Deploy idempotente del stack de observabilidad |
+| `kubectl rollout restart sts/prometheus sts/loki sts/tempo -n latiendita-observability` | Recargar config de los observables (ConfigMaps sin hash) |
 | `kubectl get pvc -n latiendita` | Volumes persistentos de los StatefulSets |
 | `kubectl exec -n latiendita auth-db-0 -- psql -U auth -d auth -c '\dt'` | Verificar tablas creadas por Hibernate |
 | `kubectl exec -n latiendita kafka-0 -- /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe` | Ver topics con sus particiones |
 
-## 8. Comandos destructivos — usar con cuidado
+Códigos de salida (iguales en `.sh` y `.ps1`):
+
+| Script | Códigos |
+|---|---|
+| `install-tools` | `1` uso · `2` falta una herramienta obligatoria |
+| `build-images` | `1` uso · `2` docker no disponible · `3` build fallido |
+| `kind-up` | `1` uso · `2` herramientas · `3` clúster · `4` secrets · `5` imágenes · `6` apply · `7` rollout · `8` pods |
+| `deploy` | `1` uso · `2` secrets · `3` apply · `4` no ready · `5` claves faltantes |
+
+## 8. Observabilidad
+
+Stack completo en su propio namespace: **Prometheus** (métricas + alertas), **Alertmanager**
+(recepción/deduplicación de alertas), **Loki** (logs + ruler), **Tempo** (trazas), **Alloy**
+(agente que junta logs y recibe OTLP) y **Grafana** (dashboard RED + enlaces trazas↔logs).
+
+La config vive en `observability/` y se comparte con Docker Compose: el mismo `loki.yml`,
+`tempo.yml`, `datasources.yml` y dashboard se usan en ambos entornos. En Kubernetes se
+embeben como ConfigMaps vía `observability/kustomization.yaml`.
+
+**Desplegar**
+
+```powershell
+kubectl apply -k k8s/observability                         # local / dev
+kubectl apply -k k8s/overlays/production-observability     # producción (ingress + secretos)
+```
+
+`kind-up.ps1` no lo toca: el stack se aplica aparte, así se pueden desplegar y
+reiniciar la observabilidad y las aplicaciones de forma independiente.
+
+**Acceso (port-forward)**
+
+| Comando | Para qué |
+|---|---|
+| `kubectl port-forward svc/grafana 3000:3000 -n latiendita-observability` | Grafana en http://localhost:3000 (admin / admin) |
+| `kubectl port-forward svc/prometheus 9090:9090 -n latiendita-observability` | UI y API de Prometheus |
+| `kubectl port-forward svc/alertmanager 9093:9093 -n latiendita-observability` | UI de Alertmanager |
+| `kubectl port-forward svc/loki 3100:3100 -n latiendita-observability` | API de Loki |
+| `kubectl port-forward svc/tempo 3200:3200 -n latiendita-observability` | API de Tempo |
+| `kubectl port-forward svc/alloy 12345:12345 -n latiendita-observability` | UI de Alloy |
+
+**Verificar la cadena de punta a punta**
+
+| Comando | Qué comprueba |
+|---|---|
+| `kubectl get pods -n latiendita-observability` | Los 6 workloads `Running` y `1/1` |
+| `curl -s 'http://localhost:9090/api/v1/query?query=up'` | Cada servicio scrapeado con `value: "1"` |
+| `curl -s http://localhost:9090/api/v1/rules` | Reglas de Prometheus cargadas (`Watchdog`, `TargetDown`, ...) |
+| `curl -s http://localhost:9093/api/v2/alerts` | Alertas llegando a Alertmanager (con `Watchdog` siempre activa) |
+| `curl -s http://localhost:3100/loki/api/v1/labels` | Que `application_name` y `level` existan como labels |
+| `curl -s http://localhost:3100/loki/api/v1/rules` | Reglas del ruler de Loki (tenant `fake`) y su estado |
+| `curl -s http://localhost:3200/ready` | Tempo responde `ready` |
+| `curl -s http://localhost:3000/api/health` | Grafana con `database: ok` |
+
+En Grafana: **Explore → Prometheus** con `http_server_requests_seconds_count{service="orderService"}`
+(debería tener la etiqueta `service`), **Explore → Loki** con `{application_name="orderService"}`
+y en el dashboard **La Tiendita RED** el panel de logs navegando a la pestaña **Traces** de un `traceId`.
+
+**Cambios de configuración**
+
+Los ConfigMaps se generan sin hash (`disableNameSuffixHash`) para poder inspeccionarlos,
+así que después de tocar un archivo hay que reiniciar el workload que lo monta:
+
+```powershell
+kubectl apply -k k8s/observability
+kubectl rollout restart deploy/grafana deploy/alertmanager -n latiendita-observability
+kubectl rollout restart sts/prometheus sts/loki sts/tempo -n latiendita-observability
+kubectl rollout restart ds/alloy -n latiendita-observability
+```
+
+**Dónde vive cada cosa**
+
+| Archivo | Qué define |
+|---|---|
+| `observability/<componente>/` | Config compartida Docker + Kubernetes (misma fuente de verdad) |
+| `observability/kustomization.yaml` | Los ConfigMaps anteriores listos para kustomize |
+| `k8s/observability/` | Workloads, Services, PVCs y RBAC del stack |
+| `k8s/overlays/production-observability/` | Ingress de Grafana + secretos de producción |
+| `k8s/base/<servicio>/service.yaml` | Anotaciones `prometheus.io/*` con las que Prometheus descubre los targets |
+| `k8s/base/<servicio>/configmap.yaml` | `OTLP_TRACING_ENDPOINT`: apps → Alloy → Tempo |
+
+## 9. Comandos destructivos — usar con cuidado
 
 > **Regla**: siempre `kubectl diff` o `--dry-run=client` antes, y confirmar el alcance.
 
@@ -119,7 +214,7 @@ curl http://localhost:8080/actuator/health/readiness     # status: UP
 | `kubectl drain <node> --ignore-daemonsets` | Saca pods del nodo (requiere --force si hay PV) | `kubectl cordon <node>` para evitar nuevos pods |
 | `kubectl scale deploy/gateway --replicas=0 -n latiendita` | Corta el tráfico | `kubectl rollout restart` para un bounce |
 
-## 9. Checklist de salud
+## 10. Checklist de salud
 
 Antes de decir "está funcionando", verificar:
 
@@ -127,4 +222,7 @@ Antes de decir "está funcionando", verificar:
 - [ ] `kubectl get events` → sin errores recientes (`Failed`, `BackOff`, `Unhealthy`)
 - [ ] `kubectl get endpoints gateway` → tiene al menos una IP asignada
 - [ ] `curl localhost:8080/actuator/health/readiness` (vía port-forward) → `status: UP`
-- [ ] Flujo completo: register → login → GET `/api/products` → todos responden
+- [ ] Flujo completo: register → login → GET `/api/products` con `Authorization: Bearer <token>` (del login) → todos responden
+- [ ] `kubectl get pods -n latiendita-observability` → 6 workloads `Running` y `1/1`
+- [ ] Prometheus tiene un target por servicio (`curl -s 'http://localhost:9090/api/v1/query?query=up'`)
+- [ ] Loki expone el label `application_name` (`curl -s http://localhost:3100/loki/api/v1/labels`)

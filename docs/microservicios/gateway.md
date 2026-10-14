@@ -22,9 +22,9 @@ Todas las rutas son relativas a la raíz del Gateway (ej. `http://gateway:8080`)
 | `/api/orders/**` | `orderService` | Sí (JWT) | — |
 | `/api/payments/**` | `paymentService` | Sí (JWT) | — |
 | `/api/webhooks/**` | `paymentService` | No (pública) | Webhook de MP: firma HMAC propia |
-| `/actuator/**` | Gateway local | No (pública) | health, info, prometheus |
+| `/actuator/health/**`, `/actuator/prometheus`, `/actuator/info` | Gateway local | No (pública) | El resto de `/actuator/**` (ej. `metrics`) exige JWT |
 
-El destino por defecto es `lb://<serviceId>` (load balancing vía Eureka); se puede sobreescribir por variable (`AUTH_SERVICE_BASE_URL`, etc.) con una URL directa.
+El destino por defecto es `lb://<serviceId>` (load balancing vía Eureka); se puede sobreescribir por variable (`AUTH_SERVICE_BASE_URL`, etc.) con una URL directa. **En k8s no hay Eureka**: el ConfigMap (`k8s/base/gateway/configmap.yaml`) fija `EUREKA_ENABLED=false` y define todas las `*_SERVICE_BASE_URL` apuntando a los Services del clúster (`http://auth-service`, etc.).
 
 | Método | Ruta | Descripción | Auth |
 |---|---|---|---|
@@ -61,7 +61,7 @@ Formato **ProblemDetail (RFC 7807)**, emitido por `GatewayErrorController` (mism
 | `413` | Payload Too Large | `Content-Length` supera `GATEWAY_MAX_REQUEST_SIZE` | `El cuerpo de la petición supera el máximo permitido de 1048576 bytes` |
 | `429` | Too Many Requests | Rate limit excedido (ver `Retry-After`) | `Límite de peticiones excedido; reintente más tarde` |
 | `404` | Not Found | Ruta sin registrar | `No existe ninguna ruta registrada para este recurso` |
-| `502`/`503` | Bad Gateway / Service Unavailable | Microservicio de destino caído o sin instancias en Eureka | `El microservicio de destino no está disponible` |
+| `502`/`503` | Bad Gateway / Service Unavailable | Microservicio de destino caído o sin instancias disponibles (en `lb://`, sin registros en Eureka) | `El microservicio de destino no está disponible` |
 | `504` | Gateway Timeout | El destino no respondió dentro de `GATEWAY_READ_TIMEOUT_MS` | `El microservicio de destino no respondió a tiempo` |
 
 ---
@@ -71,7 +71,7 @@ Formato **ProblemDetail (RFC 7807)**, emitido por `GatewayErrorController` (mism
 | Capa | Detalle |
 |---|---|
 | Resource server | Spring Security `oauth2ResourceServer` con JWT **HS256**, mismo `JWT_SECRET`/`JWT_ISSUER` que emite `auth-service` |
-| Rutas públicas | `/api/auth/**`, `/api/webhooks/**`, `/actuator/**`; todo lo demás exige `Authorization: Bearer <jwt>` |
+| Rutas públicas | `/api/auth/**`, `/api/webhooks/**`, `/actuator/health/**`, `/actuator/prometheus`, `/actuator/info` (`SecurityConfig.PUBLIC_PATHS`); **todo lo demás** —incluido el resto de `/actuator/**`— exige `Authorization: Bearer <jwt>` |
 | Propagación de identidad | `IdentityPropagationFilter` inyecta `X-User-Id` con el `sub` y **elimina siempre** el header enviado por el cliente |
 | Rate limiting | `RateLimitFilter` (Resilience4j, in-memory): clave = `user:<sub>` si hay token, si no `ip:<ip>` |
 | CORS | `CorsConfigurationSource` dentro de la cadena de seguridad: el preflight `OPTIONS` se contesta sin JWT; con `allow-credentials=true` los orígenes se listan explícitamente |
@@ -121,7 +121,7 @@ Formato **ProblemDetail (RFC 7807)**, emitido por `GatewayErrorController` (mism
 |---|---|
 | `test` | Tests automatizados (Eureka deshabilitado, rutas hacia un stub HTTP del JDK, `jwt.secret` de prueba) |
 | `local` | Desarrollo con `docker compose` *(pendiente)* |
-| `k8s` | Despliegue en Kubernetes *(pendiente)* |
+| `k8s` | Despliegue en Kubernetes: manifiestos en `k8s/base/gateway` + overlays. Sin perfil `application-k8s.properties`; la config se inyecta por ConfigMap (`EUREKA_ENABLED=false`, `*_SERVICE_BASE_URL` directas) y Secret |
 
 ### 5.3 Recursos Kubernetes (orientativo)
 

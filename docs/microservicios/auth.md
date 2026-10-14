@@ -162,7 +162,9 @@ Formato de respuesta de error: **ProblemDetail (RFC 7807)**, devuelto por `Globa
 |---|---|
 | `test` | Tests automatizados (Testcontainers PostgreSQL + EmbeddedKafka; propiedades vía `@TestPropertySource`: `jwt.secret` de prueba, relay congelado con `poll-interval-ms=600000` y `max-attempts=3`) |
 | `local` | Desarrollo con `docker compose` *(pendiente)* |
-| `k8s` | Despliegue en Kubernetes *(pendiente)* |
+| `k8s` | Despliegue en Kubernetes: manifiestos en `k8s/base/auth-service` + overlays. Sin perfil `application-k8s.properties`; la config se inyecta por ConfigMap y Secret |
+
+> **Kubernetes y Eureka**: en k8s este servicio corre con `EUREKA_ENABLED=false` (ver `k8s/base/auth-service/configmap.yaml`). No hay registro en Eureka ni descubrimiento `lb://`: el tráfico entra por el Gateway, que apunta a URLs directas (`AUTH_SERVICE_BASE_URL=http://auth-service`). `eureka-server` **no se despliega** en el clúster (solo aplica a desarrollo local).
 
 > No existe `application-{profile}.properties`: la config de test se inyecta por anotaciones (`@TestPropertySource`, `@EmbeddedKafka`).
 

@@ -16,24 +16,23 @@ Todas las rutas son relativas a la raíz del servicio (ej. `http://users:8080`).
 | Método | Ruta | Descripción | Request | Response | Auth |
 |---|---|---|---|---|---|
 | `GET` | `/actuator/health` | Health check para probes de Kubernetes | — | `200` `{ status }` | No |
-| `GET` | `/api/v1/users/{id}` | Obtiene un usuario por su ID | — | `200` UserDto | Sí |
-| `POST` | `/api/v1/users` | Crea un nuevo usuario | `CreateUserRequest` | `201` UserDto | No |
-| `PUT` | `/api/v1/users/{id}` | Actualiza un usuario | `UpdateUserRequest` | `200` UserDto | Sí |
-| `DELETE` | `/api/v1/users/{id}` | Elimina un usuario | — | `204` | Sí |
+| `GET` | `/api/users/{id}` | Obtiene un usuario por su ID | — | `200` UserDto | Sí |
+| `POST` | `/api/users` | Crea un nuevo usuario | `CreateUserRequest` | `201` UserDto | No |
+| `PUT` | `/api/users/{id}` | Actualiza un usuario | `UpdateUserRequest` | `200` UserDto | Sí |
+| `DELETE` | `/api/users/{id}` | Elimina un usuario | — | `204` | Sí |
 
 ---
 
 ## 3. Errores
 
-Formato de respuesta de error (estándar en todos los servicios):
+Formato de respuesta de error: **ProblemDetail (RFC 7807)**, emitido por `GlobalExceptionHandler` (mismo formato en todos los servicios):
 
 ```json
 {
-  "timestamp": "2026-10-07T12:00:00Z",
+  "type": "about:blank",
+  "title": "User not found",
   "status": 404,
-  "error": "Not Found",
-  "message": "User with id 42 not found",
-  "path": "/api/v1/users/42"
+  "detail": "User with id 42 not found"
 }
 ```
 
@@ -125,7 +124,7 @@ Formato de respuesta de error (estándar en todos los servicios):
 | Dependencia | Tipo | Para qué | Crítica | Comportamiento si cae |
 |---|---|---|---|---|
 | PostgreSQL | Base de datos | Persistencia principal | ✅ Sí | `503`, readiness en `DOWN` |
-| RabbitMQ | Mensajería | Eventos de dominio | ❌ No | Reintentos + cola duradera |
+| Kafka | Mensajería | Eventos de dominio (vía outbox transaccional) | ❌ No | El outbox retiene eventos y el relay los reintenta al volver |
 | API de pagos | Terceros | Procesar cobros | ✅ Sí | Reintentos con circuit breaker |
 
 ### 6.3 Eventos publicados/consumidos
