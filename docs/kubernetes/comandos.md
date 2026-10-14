@@ -6,7 +6,10 @@ asumen el namespace `latiendita` (recordá pasarlo siempre con `-n latiendita`).
 La observabilidad (Prometheus, Loki, Tempo, Grafana, Alloy y Alertmanager) corre en su
 propio namespace: **`latiendita-observability`** → sección 8.
 
-**Contexto actual**: clúster kind `latiendita-dev` → contexto `kind-latiendita-dev`.
+**Contexto actual**: verificalo siempre con `kubectl config current-context` antes de
+tocar nada. Los ejemplos de este doc asumen el clúster kind `latiendita-dev`
+(contexto `kind-latiendita-dev`); si tu contexto activo es otro — p. ej. el de otro
+proyecto — **no mutar nada** hasta cambiarlo con `kubectl config use-context`.
 
 > **Nota**: el clúster kind no trae `metrics-server`, por lo que `kubectl top` no funciona
 > hasta instalarlo. Para métricas de CPU/memoria de pods, primero:
@@ -118,6 +121,7 @@ curl http://localhost:8080/actuator/health/readiness     # status: UP
 | `.\scripts\deploy.sh ... --logs gateway --log-tail 50` | Deploy + tail de logs al final |
 | `.\scripts\deploy.sh ... --timeout 120` | Cambiar el timeout de espera (default 300s, **por workload**) |
 | `.\scripts\deploy.sh -s k8s/apps/environments/local/secrets.env k8s/observability/environments/local` | Deploy idempotente del stack de observabilidad |
+| `.\scripts\deploy.sh -s k8s/apps/environments/production/secrets.env k8s/apps/environments/production` | Deploy de producción (crear antes el `secrets.env` desde su `.example`; con valores `CHANGE-ME` sale **6**) |
 | `kubectl rollout restart sts/prometheus sts/loki sts/tempo -n latiendita-observability` | Recargar config de los observables (ConfigMaps sin hash) |
 | `kubectl get pvc -n latiendita` | Volumes persistentos de los StatefulSets |
 | `kubectl exec -n latiendita auth-db-0 -- psql -U auth -d auth -c '\dt'` | Verificar tablas creadas por Hibernate |
@@ -130,7 +134,7 @@ Códigos de salida (iguales en `.sh` y `.ps1`):
 | `install-tools` | `1` uso · `2` falta una herramienta obligatoria |
 | `build-images` | `1` uso · `2` docker no disponible · `3` build fallido |
 | `kind-up` | `1` uso · `2` herramientas · `3` clúster · `4` secrets · `5` imágenes · `6` apply · `7` rollout · `8` pods |
-| `deploy` | `1` uso · `2` secrets · `3` apply · `4` no ready · `5` claves faltantes |
+| `deploy` | `1` uso · `2` secrets · `3` apply · `4` no ready · `5` claves faltantes · `6` valores de plantilla en target `production` |
 
 ## 8. Observabilidad
 
@@ -148,6 +152,11 @@ embeben como ConfigMaps vía `config/observability/kustomization.yaml`.
 kubectl apply -k k8s/observability/environments/local                         # local / dev
 kubectl apply -k k8s/observability/environments/production     # producción (ingress + secretos)
 ```
+
+> **Producción**: los dos overlays `…/environments/production` (apps y
+> observabilidad) **fallan al renderizar** si falta su `secrets.env` (gitignored;
+> crear desde el `.example` de cada uno). Si algún valor sigue siendo de plantilla
+> (`CHANGE-ME`/`changeme`), `scripts/deploy.*` sale con código **6**.
 
 `kind-up.ps1` no lo toca: el stack se aplica aparte, así se pueden desplegar y
 reiniciar la observabilidad y las aplicaciones de forma independiente.

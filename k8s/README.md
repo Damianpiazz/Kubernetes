@@ -36,6 +36,9 @@ Con los scripts (validan secretos, esperan rollouts, informan estado):
 ```powershell
 .\scripts\kind-up.ps1                                            # entorno local completo
 .\scripts\deploy.ps1 -s k8s\apps\environments\local\secrets.env k8s\apps\environments\local
+
+# producción: requiere crear antes k8s\apps\environments\production\secrets.env
+.\scripts\deploy.ps1 -s k8s\apps\environments\production\secrets.env k8s\apps\environments\production
 ```
 
 ## Reglas
@@ -50,13 +53,16 @@ Con los scripts (validan secretos, esperan rollouts, informan estado):
    datos y Kafka son servicios gestionados y sus endpoints entran por
    `configMapGenerator` en `k8s/apps/environments/production`.
 4. **Las credenciales no se commitean**: van en `secrets.env` (gitignored), con
-   `secrets.env.example` como plantilla.
+   `secrets.env.example` como plantilla. Cada environment (apps y observabilidad
+   en producción) tiene el suyo: `k8s/{apps,observability}/environments/…/secrets.env`.
+   En producción, si el archivo no existe el render falla y si algún valor sigue
+   siendo de plantilla (`CHANGE-ME`/`changeme`) `deploy.*` sale con código 6.
 
 ## Verificar sin tocar el clúster
 
 ```powershell
 kubectl kustomize k8s/apps/environments/local
-kubectl kustomize k8s/apps/environments/production
+kubectl kustomize k8s/apps/environments/production   # falla si falta production\secrets.env
 kubectl kustomize k8s/observability/environments/local
-kubectl kustomize k8s/observability/environments/production
+kubectl kustomize k8s/observability/environments/production   # ídem: secrets.env propio
 ```
