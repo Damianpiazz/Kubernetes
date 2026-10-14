@@ -53,8 +53,10 @@ Con los scripts (validan secretos, esperan rollouts, informan estado):
    datos y Kafka son servicios gestionados y sus endpoints entran por
    `configMapGenerator` en `k8s/apps/environments/production`.
 4. **Las credenciales no se commitean**: van en `secrets.env` (gitignored), con
-   `secrets.env.example` como plantilla. Cada environment (apps y observabilidad
-   en producción) tiene el suyo: `k8s/{apps,observability}/environments/…/secrets.env`.
+   `secrets.env.example` como plantilla (o se generan con `scripts/secrets.*`,
+   que rellena valores aleatorios fuertes sin pisar lo existente). Cada environment
+   (apps y observabilidad en producción) tiene el suyo:
+   `k8s/{apps,observability}/environments/…/secrets.env`.
    En producción, si el archivo no existe el render falla y si algún valor sigue
    siendo de plantilla (`CHANGE-ME`/`changeme`) `deploy.*` sale con código 6.
 

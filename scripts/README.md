@@ -7,6 +7,7 @@ Automatización del entorno local y de los despliegues de La Tiendita.
 | bash (Linux / macOS / Windows con Git Bash o WSL) | PowerShell (5.1 o superior) | Qué hace |
 |---|---|---|
 | `scripts/install-tools.sh` | `scripts/install-tools.ps1` | Verifica (e instala) las herramientas del entorno |
+| `scripts/secrets.sh` | `scripts/secrets.ps1` | Genera los `.env` / `secrets.env` desde sus plantillas |
 | `scripts/kind-up.sh` | `scripts/kind-up.ps1` | Levanta el entorno local completo sobre kind |
 | `scripts/build-images.sh` | `scripts/build-images.ps1` | Construye las imágenes Docker de los servicios |
 | `scripts/deploy.sh` | `scripts/deploy.ps1` | Aplica manifests de Kubernetes de forma idempotente |
@@ -21,6 +22,7 @@ una u otra es cuestión de entorno, no de funcionalidad.
 ```bash
 # bash
 bash scripts/install-tools.sh --check
+bash scripts/secrets.sh --check
 bash scripts/kind-up.sh
 bash scripts/deploy.sh -s k8s/apps/environments/local/secrets.env k8s/apps/environments/local
 ```
@@ -28,13 +30,15 @@ bash scripts/deploy.sh -s k8s/apps/environments/local/secrets.env k8s/apps/envir
 ```powershell
 # PowerShell
 .\scripts\install-tools.ps1 -Check
+.\scripts\secrets.ps1 -Check
 .\scripts\kind-up.ps1
 .\scripts\deploy.ps1 -s k8s/apps/environments/local/secrets.env k8s/apps/environments/local
 ```
 
-> En PowerShell, `install-tools.ps1` y `deploy.ps1` aceptan `-Help` (o `-h`).
-> `kind-up.ps1` y `build-images.ps1` no tienen interruptor de ayuda: usan el help
-> integrado de PowerShell, que trae lo mismo (descripción, parámetros y ejemplos):
+> En PowerShell, `install-tools.ps1`, `deploy.ps1` y `secrets.ps1` aceptan `-Help`
+> (o `-h`). `kind-up.ps1` y `build-images.ps1` no tienen interruptor de ayuda: usan
+> el help integrado de PowerShell, que trae lo mismo (descripción, parámetros y
+> ejemplos):
 >
 > ```powershell
 > Get-Help .\scripts\kind-up.ps1 -Full
@@ -44,8 +48,9 @@ bash scripts/deploy.sh -s k8s/apps/environments/local/secrets.env k8s/apps/envir
 
 ```text
 1. install-tools   →  docker, kubectl, kind (+ git) listos
-2. kind-up         →  clúster kind + secrets + imágenes + manifests + pods listos
-3. deploy          →  re-despliegues puntuales sobre lo que ya corre
+2. secrets         →  .env y secrets.env con valores aleatorios fuertes
+3. kind-up         →  clúster kind + secrets + imágenes + manifests + pods listos
+4. deploy          →  re-despliegues puntuales sobre lo que ya corre
 ```
 
 `kind-up` **no despliega observabilidad**: Prometheus/Grafana/Loki/Tempo/Alloy/Alertmanager
@@ -74,6 +79,61 @@ con `--check` solo verifica y no toca nada.
 bash scripts/install-tools.sh            # instala lo que falte
 bash scripts/install-tools.sh --check    # solo verifica
 ```
+
+---
+
+## secrets
+
+Genera los archivos de entorno del repo desde sus plantillas `.example`, con
+valores aleatorios fuertes en lugar de los `changeme-*`, `CHANGE-ME-*` y
+`dev-only-*` de plantilla.
+
+| `--target` | Plantilla | Destino |
+|---|---|---|
+| `compose` | `.env.example` | `.env` (Docker Compose) |
+| `local` | `k8s/apps/environments/local/secrets.env.example` | `…/secrets.env` |
+| `apps` | `k8s/apps/environments/production/secrets.env.example` | `…/secrets.env` |
+| `observability` | `k8s/observability/environments/production/secrets.env.example` | `…/secrets.env` |
+| `production` | agrupa `apps` + `observability` | |
+| `todo` (default) | los cuatro anteriores | |
+
+**Reglas:**
+
+- **Nunca pisa** un destino que ya existe (salvo `--force`), igual que `kind-up`.
+- Se parte del `.example`: comentarios, orden y claves no secretas se conservan
+  (`GF_SECURITY_ADMIN_USER`, `TRACING_SAMPLING_PROBABILITY`, Mercado Pago **vacío**);
+  solo se generan valores para `JWT_SECRET`, `*_DB_PASSWORD` y `*_ADMIN_PASSWORD`,
+  **distintos por archivo**.
+- Formatos: `JWT_SECRET` de 48 bytes en base64url (sin `+`, `/`, `=`) y contraseñas
+  de 24 caracteres `[A-Za-z0-9]` (sin signos, seguras para JDBC URLs).
+- Salida en UTF-8 sin BOM y con finales de línea LF; los archivos generados son
+  gitignored: **no se commitean**.
+
+| bash | PowerShell | Default |
+|---|---|---|
+| `-t`, `--target <id>` | `-Target` | `todo` |
+| `--force` | `-Force` | sin forzar: los existentes se omiten |
+| `--check` | `-Check` | genera |
+| `-h`, `--help` | `-Help` (o `-h`) | — |
+
+Pasos: plantillas → destinos (qué existe / qué falta) → generación, o
+verificación con `--check` (que reporta faltantes y valores de plantilla).
+
+```bash
+bash scripts/secrets.sh                      # genera los 4 que falten
+bash scripts/secrets.sh --target production   # solo los dos de producción
+bash scripts/secrets.sh --check               # verifica; sale con 4 si hay problemas
+```
+
+```powershell
+.\scripts\secrets.ps1 -Target production -Force
+.\scripts\secrets.ps1 -Check
+```
+
+> `kind-up` sigue creando el `secrets.env` local desde su `.example` si falta (con
+> valores de desarrollo, y no lo pisa): `secrets` es el que lo reemplaza por valores
+> fuertes. Los dos de producción no existen hasta que se generan, y `deploy` sale
+> con código `6` en targets `production` mientras queden valores de plantilla.
 
 ---
 
@@ -184,6 +244,7 @@ Iguales en `.sh` y `.ps1`; pensados para usarlos desde CI o con `$?` / `$LASTEXI
 | Script | Códigos |
 |---|---|
 | `install-tools` | `1` uso · `2` falta una herramienta obligatoria |
+| `secrets` | `1` uso o target desconocido · `2` falta una plantilla `.example` · `3` escritura falló · `4` `--check` con faltantes o valores de plantilla |
 | `build-images` | `1` uso · `2` docker no disponible · `3` build fallido |
 | `kind-up` | `1` uso · `2` herramientas · `3` clúster · `4` secrets · `5` imágenes · `6` apply · `7` rollout · `8` pods |
 | `deploy` | `1` uso · `2` secrets · `3` apply · `4` no ready · `5` claves faltantes · `6` valores de plantilla en target `production` |
@@ -213,7 +274,7 @@ Iguales en `.sh` y `.ps1`; pensados para usarlos desde CI o con `$?` / `$LASTEXI
 ## Verificar un cambio
 
 ```bash
-bash -n scripts/install-tools.sh && bash -n scripts/kind-up.sh \
+bash -n scripts/install-tools.sh && bash -n scripts/secrets.sh && bash -n scripts/kind-up.sh \
   && bash -n scripts/build-images.sh && bash -n scripts/deploy.sh
 ```
 
@@ -226,7 +287,8 @@ Get-ChildItem scripts\*.ps1 | ForEach-Object {
 ```
 
 Y una corrida real que no toca el clúster: `--help` / `-Help` en cualquiera, y
-`--check` / `-Check` en `install-tools`.
+`--check` / `-Check` en `install-tools` y `secrets` (`secrets --check` además
+no escribe nada).
 
 ## Referencias
 

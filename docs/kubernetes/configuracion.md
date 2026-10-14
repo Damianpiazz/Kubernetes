@@ -318,12 +318,19 @@ MERCADO_PAGO_WEBHOOK_SECRET=        # opcional
 
 - `scripts/kind-up.*` crea el `secrets.env` desde el `.example` **solo si no
   existe** (nunca pisa lo que ya hay).
+- `scripts/secrets.*` genera los cuatro archivos de entorno que falten
+  (`.env` de Compose + los tres `secrets.env`) desde su `.example`, rellenando
+  `JWT_SECRET`, `*_DB_PASSWORD` y `*_ADMIN_PASSWORD` con valores aleatorios
+  fuertes **distintos por archivo** y conservando el resto de claves y
+  comentarios; nunca pisa lo existente (salvo `--force`) y con `--check` solo
+  verifica faltantes y valores de plantilla (**exit 4**).
 - `scripts/deploy.*` extrae del manifiesto las claves que aparecen en
   `secretKeyRef` y valida que existan en el archivo: si falta alguna → **exit 5**;
   si están definidas pero vacías (las de Mercado Pago) → solo aviso.
 - Producción usa **el mismo patrón** con su propio archivo
   `k8s/apps/environments/production/secrets.env` (gitignored, plantilla
-  `secrets.env.example` con `CHANGE-ME-*`). Si no existe, `kubectl kustomize`
+  `secrets.env.example` con `CHANGE-ME-*`; se crea con
+  `scripts/secrets.sh --target production`). Si no existe, `kubectl kustomize`
   falla → **exit 3**; y si algún valor sigue siendo de plantilla
   (`CHANGE-ME`, `changeme`, `dev-only`) en un target `production` → **exit 6**.
 - `generatorOptions.disableNameSuffixHash: true` en todos los generadores: los
@@ -354,14 +361,16 @@ MERCADO_PAGO_WEBHOOK_SECRET=        # opcional
   de las 6 imágenes) y los `configMapGenerator` (URL/user de las 5 bases, Kafka, CORS).
 - `k8s/apps/environments/production/ingress.yaml`: `ingressClassName` y `host`.
 - `k8s/observability/environments/production/secrets.env`: **crear** desde su
-  `secrets.env.example` (gitignored) con la contraseña real de Grafana.
+  `secrets.env.example` (gitignored) con la contraseña real de Grafana —
+  `scripts/secrets.sh --target observability` la genera con valor fuerte.
   Sin él el render falla; con valores de plantilla el deploy sale con **exit 6**.
 - `k8s/observability/environments/production/kustomization.yaml`: si el clúster no
   tiene StorageClass por defecto, descomentar el bloque comentado de `storageClassName`.
 - `k8s/observability/environments/production/ingress.yaml`: `ingressClassName` y host.
 - `k8s/apps/environments/production/secrets.env`: **crear** desde su
   `secrets.env.example` (el archivo real es gitignored) y rellenar los
-  `CHANGE-ME-*` con valores generados. Sin él el render falla (**exit 3**);
+  `CHANGE-ME-*` con valores generados — `scripts/secrets.sh --target apps`
+  lo hace de una. Sin él el render falla (**exit 3**);
   con valores de plantilla el deploy falla (**exit 6**).
 
 ---

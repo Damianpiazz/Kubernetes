@@ -115,13 +115,15 @@ curl http://localhost:8080/actuator/health/readiness     # status: UP
 | Comando | Para qué |
 |---|---|
 | `scripts/install-tools.sh --check` (o `install-tools.ps1 -Check`) | Verifica docker, kubectl, kind y git; sin `--check` instala lo que falte |
+| `scripts/secrets.sh` (o `secrets.ps1`) | Genera los `.env` y `secrets.env` que falten desde sus `.example`, con valores aleatorios fuertes; nunca pisa (salvo `--force`) |
+| `scripts/secrets.sh --check` (o `secrets.ps1 -Check`) | Solo verifica: destinos faltantes y valores de plantilla, sin escribir nada (sale **4** si hay problemas) |
 | `scripts/kind-up.sh` (o `kind-up.ps1`) | Entorno local completo: clúster kind, secrets, imágenes, manifests y pods listos |
 | `scripts/build-images.sh --tag dev` (o `build-images.ps1 -Tag dev`) | Construye `latiendita/<servicio>:<tag>` de los seis servicios |
 | `.\scripts\deploy.sh -s k8s/apps/environments/local/secrets.env k8s/apps/environments/local` | Deploy idempotente completo (valida secretos, aplica, espera) |
 | `.\scripts\deploy.sh ... --logs gateway --log-tail 50` | Deploy + tail de logs al final |
 | `.\scripts\deploy.sh ... --timeout 120` | Cambiar el timeout de espera (default 300s, **por workload**) |
 | `.\scripts\deploy.sh -s k8s/apps/environments/local/secrets.env k8s/observability/environments/local` | Deploy idempotente del stack de observabilidad |
-| `.\scripts\deploy.sh -s k8s/apps/environments/production/secrets.env k8s/apps/environments/production` | Deploy de producción (crear antes el `secrets.env` desde su `.example`; con valores `CHANGE-ME` sale **6**) |
+| `.\scripts\deploy.sh -s k8s/apps/environments/production/secrets.env k8s/apps/environments/production` | Deploy de producción (crear antes el `secrets.env` con `scripts/secrets.sh --target production`; con valores de plantilla sale **6**) |
 | `kubectl rollout restart sts/prometheus sts/loki sts/tempo -n latiendita-observability` | Recargar config de los observables (ConfigMaps sin hash) |
 | `kubectl get pvc -n latiendita` | Volumes persistentos de los StatefulSets |
 | `kubectl exec -n latiendita auth-db-0 -- psql -U auth -d auth -c '\dt'` | Verificar tablas creadas por Hibernate |
@@ -132,6 +134,7 @@ Códigos de salida (iguales en `.sh` y `.ps1`):
 | Script | Códigos |
 |---|---|
 | `install-tools` | `1` uso · `2` falta una herramienta obligatoria |
+| `secrets` | `1` uso o target desconocido · `2` falta una plantilla `.example` · `3` escritura falló · `4` `--check` con faltantes o valores de plantilla |
 | `build-images` | `1` uso · `2` docker no disponible · `3` build fallido |
 | `kind-up` | `1` uso · `2` herramientas · `3` clúster · `4` secrets · `5` imágenes · `6` apply · `7` rollout · `8` pods |
 | `deploy` | `1` uso · `2` secrets · `3` apply · `4` no ready · `5` claves faltantes · `6` valores de plantilla en target `production` |
