@@ -58,8 +58,9 @@ Con los scripts (validan secretos, esperan rollouts, informan estado):
 4. **Las credenciales no se commitean**: van en `secrets.env` (gitignored con el
    patrón global `k8s/**/secrets.env`), con `secrets.env.example` como plantilla
    (o se generan con `scripts/secrets.*`, que rellena valores aleatorios fuertes
-   sin pisar lo existente). Cada environment (apps y observabilidad en producción)
-   tiene el suyo: `k8s/{apps,observability}/environments/…/secrets.env`.
+   sin pisar lo existente). Cada environment tiene el suyo — apps (local y
+   producción) y observabilidad (local y producción):
+   `k8s/{apps,observability}/environments/…/secrets.env`.
    En producción, si el archivo no existe el render falla y si algún valor sigue
    siendo de plantilla (`CHANGE-ME`/`changeme`) `deploy.*` sale con código 6.
    Excepción a este patrón: los Secretos de TLS los emite y renueva
