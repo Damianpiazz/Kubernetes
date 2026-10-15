@@ -5,6 +5,10 @@ metadata:
   labels:
     app.kubernetes.io/name: grafana
     app.kubernetes.io/part-of: la-tiendita
+  annotations:
+    # Mismo flujo que el Ingress de las apps: cert-manager emite y renueva el
+    # certificado (ver k8s/cluster-scope/clusterissuer-letsencrypt.yaml).
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   # Reemplazar CHANGE-ME: ingressClassName del controlador instalado en el
   # clúster y host DNS apuntando al balanceador.
@@ -13,6 +17,10 @@ spec:
   # el modo subpath de Grafana, que requiere GF_SERVER_ROOT_URL +
   # GF_SERVER_SERVE_FROM_SUB_PATH y es propenso a romper assets.
   ingressClassName: CHANGE-ME
+  tls:
+    - hosts:
+        - grafana.CHANGE-ME.example.com
+      secretName: grafana-tls
   rules:
     - host: grafana.CHANGE-ME.example.com
       http:

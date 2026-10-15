@@ -383,10 +383,65 @@ MERCADO_PAGO_WEBHOOK_SECRET=        # opcional
 | Service de datos | Headless (`clusterIP: None`) para DNS estable de StatefulSets |
 | DNS interna | `<svc>.<namespace>.svc.cluster.local` (FQDN usado para cruzar hacia Alloy) |
 | Local | `kubectl port-forward svc/gateway 8080:80 -n latiendita` |
-| Producción (apps) | Ingress → `gateway:80`, path `/` (Prefix) |
-| Producción (Grafana) | Ingress en **host propio** (`grafana.CHANGE-ME.example.com`), deliberadamente no bajo `/grafana` del host de las apps: evita el modo subpath de Grafana (`GF_SERVER_ROOT_URL` + `SERVE_FROM_SUB_PATH`), propenso a romper assets |
+| Producción (apps) | Ingress → `gateway:80`, path `/` (Prefix), con `tls:` vía cert-manager |
+| Producción (Grafana) | Ingress en **host propio** (`grafana.CHANGE-ME.example.com`) con `tls:` vía cert-manager, deliberadamente no bajo `/grafana` del host de las apps: evita el modo subpath de Grafana (`GF_SERVER_ROOT_URL` + `SERVE_FROM_SUB_PATH`), propenso a romper assets |
 | CORS | Configurado en el gateway (`CORS_ALLOWED_ORIGINS`), no con NetworkPolicy |
-| NetworkPolicy / HPA | **No hay** (ver §15) |
+| NetworkPolicy | Default-deny + matriz explícita en ambos stacks (ver §10.1). La CNI de kind no la aplica |
+| TLS | cert-manager + Let's Encrypt (HTTP-01) en producción (ver §10.2) |
+| HPA | **No hay** (ver §15) |
+
+### 10.1 Aislamiento de red (NetworkPolicy)
+
+Cada stack declara su default-deny con la matriz de tráfico real como
+comentario (todo lo que se permite está enumerado punto por punto):
+
+- **`k8s/apps/base/networkpolicy.yaml`** — aislamiento de **ingress** (aplica en
+  local y producción): este-oeste (gateway → backends, order → product,
+  payment → order), apps → tier de datos, apps → Alloy (OTLP cross-namespace),
+  Prometheus → pods de apps (el `kubernetes_sd role=endpoints` scrapea pod IPs,
+  no Services: sin esa regla el scrape cae entero).
+- **`k8s/apps/environments/local/networkpolicy-egress.yaml`** — aislamiento de
+  **egress**, solo local: acá todo es in-cluster (Postgres y Kafka son
+  StatefulSets), así que se niega la salida y se abre DNS, datos y OTLP.
+- **`k8s/observability/base/networkpolicy.yaml`** — ingress + egress del stack
+  de observabilidad (idéntico en ambos entornos: Alloy → API del cluster,
+  scrape cruzado, ruler → Alertmanager, Grafana → datasources).
+- **`…/environments/production/networkpolicy-ingress.yaml`** (ambos stacks) —
+  único origen externo permitido: el namespace del controlador del Ingress
+  (`CHANGE-ME`, coherente con `ingressClassName`).
+
+Advertencias: en **local** kindnet no enforcea NetworkPolicy (validación
+estructural; el port-forward no se afecta: el kubelet inyecta ese tráfico fuera
+del datapath del CNI). En **producción** la CNI del clúster debe enforcear
+(Calico, Cilium, etc.). El egress deny de local **no** se replica en
+producción: las DB/Kafka gestionadas tienen endpoints externos no declarables de
+forma portable (FQDN lo soportan solo Cilium y similares).
+
+### 10.2 TLS con cert-manager
+
+En producción ambos Ingress llevan la anotación
+`cert-manager.io/cluster-issuer: letsencrypt-prod` y un bloque `tls:`; los
+Secretos (`la-tiendita-tls`, `grafana-tls`) los emite y renueva cert-manager.
+El `ClusterIssuer` (HTTP-01, email y `ingressClassName` con `CHANGE-ME`) vive
+en `k8s/cluster-scope/clusterissuer-letsencrypt.yaml`: es un recurso
+cluster-scoped, se aplica una vez y queda fuera de los kustomize de los stacks:
+
+```bash
+# 1. Instalar cert-manager en el clúster (versión pinneada)
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.21.2/cert-manager.yaml
+kubectl wait --for=condition=Available -n cert-manager deploy --all
+
+# 2. Registrar el issuer (una sola vez)
+kubectl apply -f k8s/cluster-scope/clusterissuer-letsencrypt.yaml
+
+# 3. Verificar la emisión tras aplicar el environment de producción
+kubectl get certificate -n latiendita
+kubectl describe certificate la-tiendita-tls -n latiendita
+```
+
+Para testear sin consumir los límites de Let's Encrypt: duplicar el issuer
+apuntando a `acme-staging-v02.api.letsencrypt.org/directory` y usar esa
+anotación mientras se valida.
 
 ---
 
@@ -549,6 +604,8 @@ bash y PowerShell con exit 0. **No se validó** un `kind-up` completo ni un
 | **1 réplica local / 2 + PDB en producción** | Ahorrar recursos en local; tolerar evacuaciones en producción | Igual en ambos |
 | **Scripts espejo `.sh`/`.ps1` autocontenidos** | El repo se opera desde Windows (PowerShell) y desde Linux/macOS/CI (bash) con paridad de opciones y códigos de salida, sin dependencias entre archivos | Un solo lenguaje, o wrappers |
 | **Observabilidad como stack separado** | Se aplica y reinicia independientemente de la aplicación | Todo junto |
+| **NetworkPolicy: ingress en `base`, egress solo en `local`** | El ingress-es es igual en ambos entornos; el egress-deny solo es viable donde todo es in-cluster (en prod los endpoints gestionados no son declarables de forma portable) | Mismas políticas en ambos entornos (rompería prod) o default-deny solo en prod (sin aislamiento real en local) |
+| **cert-manager + Let's Encrypt (HTTP-01)** | Renovación automática, sin secretos de TLS a mano, anotación estándar en el Ingress | Secretos TLS manuales (renovación manual), terminación solo en el LB (el repo queda mudo sobre TLS) |
 
 ---
 
@@ -559,13 +616,13 @@ bash y PowerShell con exit 0. **No se validó** un `kind-up` completo ni un
 | 1 | Todos los `CHANGE-ME` de producción (registry/tag, ingress class/host, endpoints de DB/Kafka, CORS) | No se puede aplicar el environment de producción tal como está |
 | 2 | **Sin CI/CD**: `.github/` está vacío | Builds, pruebas y deploys manuales |
 | 3 | `terraform/` vacío (solo `.gitkeep`) | La infraestructura del clúster no está codificada |
-| 4 | `frontend/` vacío (solo `.gitkeep`): no hay SPA | Hoy no corre en ningún lado: en `compose.yaml` solo existe la **red** `frontend`, no un servicio, y en k8s no hay Deployment. Hay que crearlo en ambos |
+| 4 | `frontend/` tiene la plantilla Next.js pero **ningún servicio la despliega**: no hay servicio `frontend` en `compose.yaml` (solo la red) ni Deployment en k8s | Hay que crear el servicio en ambos entornos cuando se implemente la SPA |
 | 5 | El clúster kind no trae `metrics-server` | `kubectl top` no funciona hasta instalarlo |
-| 6 | Sin `HPA`, sin `NetworkPolicy`, sin `PodDisruptionBudget` en local | Escalado y segmentación de red manuales |
+| 6 | Sin `HPA`; `PodDisruptionBudget` solo en producción | Escalado y presupuestos de interrupción manuales |
 | 7 | Observabilidad sin `StorageClass` declarada (solo un bloque comentado en el environment de producción) | Si el clúster no tiene StorageClass por defecto, los PVC quedan `Pending` |
-| 8 | Sin `NetworkPolicy` (y kind/k3d traen un CNI que no la aplica) | Segmentación de red solo testeable en un clúster con CNI compatible (Calico/Cilium); además `ingressClassName` sigue en `CHANGE-ME` |
+| 8 | NetworkPolicy declaradas pero **kind/k3d no las aplica** (kindnet); `ingressClassName` y el namespace del controlador siguen en `CHANGE-ME` | La matriz es estructural hasta instalar Calico/Cilium en local y definir el controlador en producción |
 | 9 | Sin labels `pod-security.kubernetes.io/*` (`restricted` rompería Postgres en local) | Etiquetar solo el namespace en el overlay de producción, cuando haya clúster real |
-| 10 | Ingress de producción sin `tls:` / ssl-redirect / timeouts de proxy | Depende del controlador (`ingressClassName` es `CHANGE-ME`): definir controlador + cert-manager antes de exponer públicamente |
+| 10 | cert-manager es **prerequisito del clúster de producción** (§10.2) y los `CHANGE-ME` del ClusterIssuer (email, ingressClassName) siguen pendientes | Los Ingress de producción ya declaran `tls:`, pero sin cert-manager instalado el certificado nunca se emite |
 | 11 | Pods de apps con el token del SA `default` montado (`automountServiceAccountToken` sin fijar) | Pospuesto: requiere probar con clúster arriba que nada use la API de k8s |
 | 12 | Posiciones de Alloy en `emptyDir` | Pospuesto: persistirlas exige hostPath (regla "sin hostPath" del repo) o aceptar logs duplicados/faltantes al reiniciar el pod |
 | 13 | `eureka-server` inexistente en k8s | Esperado (§1), pero las docs de los microservicios hablan de Compose: leerlas con ese contexto |

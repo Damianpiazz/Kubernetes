@@ -8,17 +8,20 @@ k8s/
 ├── apps/                              Stack: los 6 microservicios   (ns latiendita)
 │   ├── base/                          Manifiestos neutrales, sin entorno ni credenciales
 │   └── environments/
-│       ├── local/                     kind/k3d: base + data + secretos locales
-│       └── production/                Clúster real: imágenes, réplicas, DB/Kafka externas
+│       ├── local/                     kind/k3d: base + data + secretos locales + egress aislado
+│       └── production/                Clúster real: imágenes, réplicas, DB/Kafka externas, TLS
 │
 ├── data/                              Stack: tier de datos SOLO local (ns latiendita)
 │   └── base/                          5 × Postgres (StatefulSet) + Kafka. No va a producción.
 │
-└── observability/                     Stack: observabilidad (ns latiendita-observability)
-    ├── base/                          Prometheus, Loki, Tempo, Grafana, Alloy, Alertmanager + RBAC
-    └── environments/
-        ├── local/                     Punto de entrada local + secretos de Grafana (dev)
-        └── production/                Ingress de Grafana + secretos reales
+├── observability/                     Stack: observabilidad (ns latiendita-observability)
+│   ├── base/                          Prometheus, Loki, Tempo, Grafana, Alloy, Alertmanager + RBAC + NetworkPolicy
+│   └── environments/
+│       ├── local/                     Punto de entrada local + secretos de Grafana (dev)
+│       └── production/                Ingress de Grafana (TLS) + secretos reales
+│
+└── cluster-scope/                     Recursos de ámbito de clúster (fuera de kustomize)
+    └── clusterissuer-letsencrypt.yaml cert-manager → Let's Encrypt (aplicar una vez con kubectl apply -f)
 ```
 
 La **configuración** no vive acá: está en [`config/observability/`](../config/observability),
@@ -52,13 +55,27 @@ Con los scripts (validan secretos, esperan rollouts, informan estado):
 3. **`data/` sólo se instancia en `environments/local`.** En producción las bases de
    datos y Kafka son servicios gestionados y sus endpoints entran por
    `configMapGenerator` en `k8s/apps/environments/production`.
-4. **Las credenciales no se commitean**: van en `secrets.env` (gitignored), con
-   `secrets.env.example` como plantilla (o se generan con `scripts/secrets.*`,
-   que rellena valores aleatorios fuertes sin pisar lo existente). Cada environment
-   (apps y observabilidad en producción) tiene el suyo:
-   `k8s/{apps,observability}/environments/…/secrets.env`.
+4. **Las credenciales no se commitean**: van en `secrets.env` (gitignored con el
+   patrón global `k8s/**/secrets.env`), con `secrets.env.example` como plantilla
+   (o se generan con `scripts/secrets.*`, que rellena valores aleatorios fuertes
+   sin pisar lo existente). Cada environment (apps y observabilidad en producción)
+   tiene el suyo: `k8s/{apps,observability}/environments/…/secrets.env`.
    En producción, si el archivo no existe el render falla y si algún valor sigue
    siendo de plantilla (`CHANGE-ME`/`changeme`) `deploy.*` sale con código 6.
+   Excepción a este patrón: los Secretos de TLS los emite y renueva
+   cert-manager (nadie los genera a mano).
+5. **La red está aislada con NetworkPolicy** (default-deny + matriz explícita,
+   declarada en cada `base` y ampliada en los environments). En **local** el
+   aislamiento es estructural: la CNI de kind (kindnet) no enforcea policies y
+   el acceso sigue siendo por port-forward. En **producción** la CNI del clúster
+   sí debe enforcear (Calico, Cilium, etc.) y hay que reemplazar los
+   `CHANGE-ME` de las policies de ingress (namespace del controlador).
+6. **TLS en producción lo gestiona cert-manager** (Let's Encrypt, HTTP-01): los
+   Ingress llevan la anotación `cert-manager.io/cluster-issuer` y el ClusterIssuer
+   vive en `k8s/cluster-scope/` (recurso cluster-scoped, se aplica una vez:
+   `kubectl apply -f k8s/cluster-scope/clusterissuer-letsencrypt.yaml`).
+   Requisito previo del clúster: cert-manager instalado (ver
+   [`docs/kubernetes/configuracion.md`](../docs/kubernetes/configuracion.md) §10).
 
 ## Verificar sin tocar el clúster
 

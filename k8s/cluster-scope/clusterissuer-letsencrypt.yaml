@@ -1,0 +1,43 @@
+# ClusterIssuer de cert-manager para Let's Encrypt (HTTP-01).
+#
+# RECURSO CLUSTER-SCOPED: no pertenece a ningún stack ni environment y NO se
+# agrega a ningún kustomization (el `namespace:` de cada base lo pisaría la
+# intención de aplicarlo una sola vez a nivel de clúster, y no tiene variantes
+# por entorno). Se aplica una vez, después de instalar cert-manager:
+#
+#   kubectl apply -f k8s/cluster-scope/clusterissuer-letsencrypt.yaml
+#
+# Requisitos previos (ver docs/kubernetes/configuracion.md §10):
+#   - cert-manager instalado en el clúster (versión pinneada recomendada: v1.21.2)
+#     kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.21.2/cert-manager.yaml
+#   - Los hosts de los Ingress (CHANGE-ME.example.com y grafana.CHANGE-ME.example.com)
+#     resolviendo hacia el balanceador del clúster: el solver HTTP-01 necesita
+#     que Let's Encrypt alcance /.well-known/acme-challenge por HTTP.
+#
+# CHANGE-ME pendientes:
+#   - solvers[0].http01.ingressClassName: mismo controlador que los Ingress
+#   - acme.email: casilla real para las notificaciones de expiración de LE
+#
+# Nota de testing: para probar sin consumir los límites de Let's Encrypt,
+# duplicar este archivo apuntando a
+# https://acme-staging-v02.api.letsencrypt.org/directory (issuer
+# letsencrypt-staging) y cambiar la anotación de los Ingress mientras se valida.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    # Cambiar CHANGE-ME por el email real del responsable de la infraestructura.
+    email: CHANGE-ME@example.com
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      # cert-manager guarda la cuenta ACME acá (lo gestiona él, no el repo).
+      name: letsencrypt-prod-account
+    solvers:
+      - http01:
+          ingress:
+            # Cambiar CHANGE-ME por el IngressClass real (coherente con los
+            # ingressClassName de los Ingress y con el namespace del controlador
+            # en las NetworkPolicy de production).
+            ingressClassName: CHANGE-ME

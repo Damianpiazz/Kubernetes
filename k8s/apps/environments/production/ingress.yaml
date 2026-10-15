@@ -4,10 +4,21 @@ metadata:
   name: la-tiendita
   labels:
     app.kubernetes.io/part-of: la-tiendita
+  annotations:
+    # cert-manager emite y renueva el certificado (Let's Encrypt, HTTP-01).
+    # Requisitos: cert-manager instalado en el clúster y el ClusterIssuer
+    # aplicado (k8s/cluster-scope/clusterissuer-letsencrypt.yaml).
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   # Reemplazar CHANGE-ME: ingressClassName del controlador instalado en el clúster
   # (nginx, traefik, gateway-api, etc.) y host DNS apuntando al balanceador.
   ingressClassName: CHANGE-ME
+  tls:
+    # El Secret lo crea y renueva cert-manager (no se commitea ni se genera con
+    # scripts/secrets.*). Mismo host que la regla de abajo.
+    - hosts:
+        - CHANGE-ME.example.com
+      secretName: la-tiendita-tls
   rules:
     - host: CHANGE-ME.example.com
       http:
