@@ -1,8 +1,9 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { apiFetch, type CategoryDto, type Page, type ProductDto } from '@/lib/api'
 import {
   ArrowRight,
   ChevronDown,
@@ -30,7 +31,7 @@ type Product = {
   color: string
 }
 
-const products: Product[] = [
+const mockProducts: Product[] = [
   { id: 1, name: 'Buzo Essential Cream', category: 'Indumentaria', price: 38990, oldPrice: 45990, image: 'https://images.unsplash.com/photo-1551488831-00ddcb6c6bd3?auto=format&fit=crop&w=900&q=85', tag: 'Oferta', color: 'Crema' },
   { id: 2, name: 'Zapatillas Nova White', category: 'Calzado', price: 72990, image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=900&q=85', tag: 'Nuevo', color: 'Blanco' },
   { id: 3, name: 'Vaso térmico Aura', category: 'Hogar', price: 18990, image: 'https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?auto=format&fit=crop&w=900&q=85', color: 'Verde salvia' },
@@ -41,13 +42,13 @@ const products: Product[] = [
   { id: 8, name: 'Pantalón Wide Leg', category: 'Indumentaria', price: 51990, image: 'https://images.unsplash.com/photo-1506629905607-d9c297d2d5b7?auto=format&fit=crop&w=900&q=85', color: 'Denim' },
 ]
 
-const categories = [
-  { name: 'Todo', emoji: '✦' },
-  { name: 'Indumentaria', emoji: '◌' },
-  { name: 'Calzado', emoji: '◒' },
-  { name: 'Hogar', emoji: '⌂' },
-  { name: 'Accesorios', emoji: '◈' },
-]
+const CATEGORY_EMOJI: Record<string, string> = {
+  Todo: '✦',
+  Indumentaria: '◌',
+  Calzado: '◒',
+  Hogar: '⌂',
+  Accesorios: '◈',
+}
 
 const money = (value: number) => `$${value.toLocaleString('es-AR')}`
 
@@ -61,12 +62,57 @@ export default function Page() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [liked, setLiked] = useState<number[]>([])
   const [page, setPage] = useState(0)
+  const [catalog, setCatalog] = useState<Product[]>(mockProducts)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadCatalog() {
+      try {
+        const [productsPage, categoriesPage] = await Promise.all([
+          apiFetch<Page<ProductDto>>('/api/products?size=50'),
+          apiFetch<Page<CategoryDto>>('/api/categories?size=50'),
+        ])
+        if (cancelled) return
+        const categoryNames = new Map(
+          categoriesPage.content.map((category) => [category.categoryId, category.name]),
+        )
+        const loaded = productsPage.content.map((product) => ({
+          id: product.productId,
+          name: product.title,
+          category:
+            (product.categoryId != null ? categoryNames.get(product.categoryId) : undefined) ??
+            'Sin categoría',
+          price: Number(product.price),
+          image: product.imageUrl || mockProducts[0].image,
+          color: '',
+        }))
+        if (loaded.length > 0) setCatalog(loaded)
+      } catch (error) {
+        console.warn('Catálogo no disponible, se usan datos de ejemplo:', error)
+      }
+    }
+
+    void loadCatalog()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const categoryNames = useMemo(() => {
+    const names = new Set(catalog.map((product) => product.category))
+    return ['Todo', ...Array.from(names).sort((a, b) => a.localeCompare(b))]
+
+  }, [catalog])
 
   const filteredProducts = useMemo(
-    () => activeCategory === 'Todo' ? products : products.filter((product) => product.category === activeCategory),
-    [activeCategory],
+    () =>
+      activeCategory === 'Todo'
+        ? catalog
+        : catalog.filter((product) => product.category === activeCategory),
+    [activeCategory, catalog],
   )
-  const cartItems = products.filter((product) => cart[product.id])
+  const cartItems = catalog.filter((product) => cart[product.id])
   const cartCount = Object.values(cart).reduce((sum, quantity) => sum + quantity, 0)
   const cartTotal = cartItems.reduce((sum, product) => sum + product.price * cart[product.id], 0)
 
@@ -98,7 +144,7 @@ export default function Page() {
         <div className="hero-art"><div className="hero-note">hecho para<br /><strong>disfrutar</strong></div><img src="https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=1200&q=85" alt="Persona usando prendas de la nueva colección" /></div>
       </section>
 
-      <section id="categorias" className="category-strip"><div className="category-heading"><p>Explorá por categoría</p><span>Encontrá lo que buscás</span></div><nav className="category-nav" aria-label="Categorías de productos">{categories.map((category) => <button key={category.name} className={activeCategory === category.name ? 'category-pill active' : 'category-pill'} onClick={() => { setActiveCategory(category.name); setPage(0) }} aria-pressed={activeCategory === category.name}><span aria-hidden="true">{category.emoji}</span>{category.name}</button>)}</nav></section>
+      <section id="categorias" className="category-strip"><div className="category-heading"><p>Explorá por categoría</p><span>Encontrá lo que buscás</span></div><nav className="category-nav" aria-label="Categorías de productos">{categoryNames.map((name) => <button key={name} className={activeCategory === name ? 'category-pill active' : 'category-pill'} onClick={() => { setActiveCategory(name); setPage(0) }} aria-pressed={activeCategory === name}><span aria-hidden="true">{CATEGORY_EMOJI[name] ?? '◈'}</span>{name}</button>)}</nav></section>
 
       <section id="catalogo" className="catalog-section"><div className="section-heading"><div><p className="eyebrow">selección de la semana</p><h2>Lo más elegido</h2></div><Button variant="ghost" className="desktop-only">Ver todo <ArrowRight data-icon="inline-end" /></Button></div><div className="product-grid">{filteredProducts.map((product) => <article className="product-card" key={product.id}><div className="product-image"><img src={product.image} alt={product.name} loading="lazy" />{product.tag && <Badge className="product-tag" variant={product.tag === 'Oferta' ? 'destructive' : 'secondary'}>{product.tag}</Badge>}<button className="like-button" aria-label={`Agregar ${product.name} a favoritos`} onClick={() => setLiked((current) => current.includes(product.id) ? current.filter((id) => id !== product.id) : [...current, product.id])}><Heart fill={liked.includes(product.id) ? 'currentColor' : 'none'} /></button><button className="quick-add" onClick={() => { addToCart(product.id); setCartOpen(true) }}><Plus data-icon="inline-start" /> Agregar</button></div><div className="product-info"><div><p className="product-category">{product.category}</p><h3>{product.name}</h3></div><div className="price-row"><strong>{money(product.price)}</strong>{product.oldPrice && <del>{money(product.oldPrice)}</del>}</div></div></article>)}</div><div className="pagination"><span>0{page + 1} / 02</span><div><Button variant="outline" size="icon" disabled={page === 0} onClick={() => setPage(0)}><ChevronLeft /></Button><Button variant="outline" size="icon" disabled={page === 1} onClick={() => setPage(1)}><ChevronRight /></Button></div></div></section>
 
