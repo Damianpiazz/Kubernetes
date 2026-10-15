@@ -40,7 +40,7 @@ propio namespace.
 | Componente | Motivo |
 |---|---|
 | `eureka-server` | En k8s no hay descubrimiento Spring Cloud: todos los servicios corren con `EUREKA_ENABLED=false` y el gateway apunta a URLs directas (`http://auth-service`, etc.). Eureka solo aplica a desarrollo local con Docker Compose. |
-| Frontend (SPA) | No existe todavía: `frontend/` está vacío (`.gitkeep`) y en `compose.yaml` solo hay una **red** llamada `frontend`, no un servicio. |
+| Frontend (SPA) | Vive **fuera del clúster**: Next.js en `frontend/`, desplegado en Vercel y hablando con el gateway por CORS (dominio exacto en producción, `*` en local). En `compose.yaml` solo hay una **red** llamada `frontend`, no un servicio. |
 | `data/base` en producción | Las bases de datos y Kafka en producción son servicios gestionados (ver §9). |
 
 ---
@@ -51,7 +51,7 @@ propio namespace.
                      local                         production
               ┌────────────────────┐        ┌──────────────────────────┐
  navegador ───┤ port-forward        │        │ DNS → Ingress            │
-  :5173 ──────► svc/gateway 8080:80 │        │ host CHANGE-ME → gateway │
+  :3000 ──────► svc/gateway 8080:80 │        │host api.CHANGE-ME → gw   │
               └─────────┬──────────┘        └────────────┬─────────────┘
                         ▼                                ▼
               ┌──────────────────────────────────────────────────────┐
@@ -114,7 +114,7 @@ Dos namespaces a propósito:
 ├── .env / .env.example               Variables para Compose (gitignored)
 ├── terraform/                        Vacío (solo .gitkeep): infra como código pendiente
 ├── .github/                          Vacío: sin workflows de CI/CD todavía
-└── frontend/                         Vacío (solo .gitkeep): SPA pendiente
+└── frontend/                         SPA Next.js: fuera del clúster, se despliega en Vercel
 ```
 
 ---
@@ -245,9 +245,16 @@ coinciden por construcción.
 | `OTLP_TRACING_ENDPOINT` (FQDN hacia Alloy) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `TRACING_SAMPLING_PROBABILITY=0.1` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `*_BASE_URL` (llamadas entre servicios) | — | — | — | `PRODUCT_SERVICE_BASE_URL` | `ORDER_SERVICE_BASE_URL` | las 5 rutas |
-| `CORS_ALLOWED_ORIGINS` | — | — | — | — | — | `http://localhost:5173` |
+| `CORS_ALLOWED_ORIGINS` | — | — | — | — | — | `*` en local; en producción el dominio exacto de Vercel |
 
-Dos claves merecen explicación:
+Tres claves merecen explicación:
+
+- **`CORS_ALLOWED_ORIGINS`** implementa la política local/producción: en local
+  cualquier origen (`*` en el configmap base y en `compose.yaml`) y en
+  producción solo el dominio exacto del frontend en Vercel (sin patrones ni
+  previews). El default de la property (`http://localhost:3000`) es
+  restrictivo a propósito: un deploy que olvide la variable falla con errores
+  de CORS visibles en vez de quedar abierto.
 
 - **`OTLP_TRACING_ENDPOINT`** apunta a
   `http://alloy.latiendita-observability.svc.cluster.local:4318/v1/traces` con
@@ -351,8 +358,8 @@ MERCADO_PAGO_WEBHOOK_SECRET=        # opcional
 | Límites de agregado | — | `ResourceQuota` + `LimitRange` (`quotas.yaml`, solo en este overlay) |
 | Tier de datos | incluido (`../../data/base`) | **excluido** |
 | Endpoints DB/Kafka | nombres de Service dentro del clúster (`auth-db:5432`, `kafka:9092`) | externos por `configMapGenerator` + `behavior: merge` (`CHANGE-ME...`) |
-| Ingress | no hay (port-forward) | `ingress.yaml` → `gateway:80` en `CHANGE-ME.example.com` |
-| CORS | `http://localhost:5173` | `https://CHANGE-ME.example.com` (por merge) |
+| Ingress | no hay (port-forward) | `ingress.yaml` → `gateway:80`, path `/api` en `api.CHANGE-ME.example.com` (solo API: la UI vive en Vercel) |
+| CORS | `*` (cualquier origen, por merge del configmap base) | `https://CHANGE-ME.vercel.app` exacto (por merge; sin patrones ni previews) |
 | Secretos de Grafana | `admin`/`admin` | `CHANGE-ME` |
 
 ### Antes de aplicar `production` hay que reemplazar todos los `CHANGE-ME`
@@ -616,7 +623,7 @@ bash y PowerShell con exit 0. **No se validó** un `kind-up` completo ni un
 | 1 | Todos los `CHANGE-ME` de producción (registry/tag, ingress class/host, endpoints de DB/Kafka, CORS) | No se puede aplicar el environment de producción tal como está |
 | 2 | **Sin CI/CD**: `.github/` está vacío | Builds, pruebas y deploys manuales |
 | 3 | `terraform/` vacío (solo `.gitkeep`) | La infraestructura del clúster no está codificada |
-| 4 | `frontend/` tiene la plantilla Next.js pero **ningún servicio la despliega**: no hay servicio `frontend` en `compose.yaml` (solo la red) ni Deployment en k8s | Hay que crear el servicio en ambos entornos cuando se implemente la SPA |
+| 4 | La SPA (Next.js en `frontend/`) vive **fuera del clúster por diseño** y se despliega en Vercel **manualmente** (sin pipeline) | Deploy manual del UI; el backend solo expone la API (`/api`) y el gateway acepta en producción solo el dominio exacto de Vercel |
 | 5 | El clúster kind no trae `metrics-server` | `kubectl top` no funciona hasta instalarlo |
 | 6 | Sin `HPA`; `PodDisruptionBudget` solo en producción | Escalado y presupuestos de interrupción manuales |
 | 7 | Observabilidad sin `StorageClass` declarada (solo un bloque comentado en el environment de producción) | Si el clúster no tiene StorageClass por defecto, los PVC quedan `Pending` |
