@@ -25,6 +25,5 @@ Thumbs.db
 .atl
 
 # Secretos de Kubernetes (generar desde secrets.env.example)
-k8s/apps/environments/local/secrets.env
-k8s/apps/environments/production/secrets.env
-k8s/observability/environments/production/secrets.env
+# Patrón global: cubre cualquier environment actual o futuro de cualquier stack.
+k8s/**/secrets.env
