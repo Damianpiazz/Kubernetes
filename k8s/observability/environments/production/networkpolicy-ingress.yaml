@@ -1,0 +1,31 @@
+# Exposición de Grafana — SOLO el entorno production.
+#
+# En producción Grafana se publica detrás del Ingress (host propio, sin TLS
+# todavía → ver k8s/cluster-scope/ y la sección de ingress). El único origen
+# permitido hacia el pod es el controlador del Ingress, en SU namespace.
+#
+# CHANGE-ME: mismo namespace real del controlador que en
+# k8s/apps/environments/production/networkpolicy-ingress.yaml.
+#
+# En local no va política equivalente: el acceso de desarrollo es
+# `kubectl port-forward`, que no pasa por el datapath del CNI.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-controller
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: CHANGE-ME-ingress-nginx
+      ports:
+        - port: 3000
+          protocol: TCP

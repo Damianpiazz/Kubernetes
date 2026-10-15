@@ -13,6 +13,7 @@ namespace: latiendita
 resources:
   - ../../base
   - ingress.yaml
+  - networkpolicy-ingress.yaml
   - pdb.yaml
   - quotas.yaml
 

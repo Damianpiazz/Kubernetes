@@ -22,6 +22,7 @@ resources:
   - namespace.yaml
   - ../../../config/observability
   - rbac.yaml
+  - networkpolicy.yaml
   - prometheus/statefulset.yaml
   - alertmanager/deployment.yaml
   - loki/statefulset.yaml

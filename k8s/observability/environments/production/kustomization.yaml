@@ -12,6 +12,7 @@ namespace: latiendita-observability
 resources:
   - ../../base
   - ingress.yaml
+  - networkpolicy-ingress.yaml
 
 # Credenciales REALES de Grafana: van en secrets.env (gitignored), mismo
 # patrón que k8s/apps/environments/production/secrets.env. NO commitear el

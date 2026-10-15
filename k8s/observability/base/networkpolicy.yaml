@@ -1,0 +1,293 @@
+# Aislamiento de red del namespace de observabilidad (latiendita-observability).
+#
+# Matriz de tráfico:
+#
+#   INGRESS
+#     apps (ns latiendita) → alloy   :4317/:4318   [OTLP: traces vía HTTP]
+#     prometheus → todos los componentes, puertos de métricas
+#                  (prometheus 9090, alertmanager 9093, grafana 3000,
+#                   loki 3100, tempo 3200, alloy 12345)
+#     entre componentes del stack:
+#       loki (ruler)  → alertmanager :9093
+#       prometheus    → alertmanager :9093
+#       alloy         → tempo :4317, loki :3100   [exportación]
+#       grafana       → prometheus :9090, loki :3100, tempo :3200  [datasources]
+#     ingress controller (solo production) → grafana :3000
+#
+#   EGRESS
+#     alloy, prometheus → API del cluster :443
+#       (kubernetes_sd + loki.source.kubernetes: watch de pods y pods/log)
+#     alloy   → tempo :4317, loki :3100
+#     loki    → alertmanager :9093
+#     prometheus → alertmanager :9093, pods de apps (ns latiendita) :8080,
+#                  pods del stack :puertos de métricas (scrape por endpoints)
+#     grafana → prometheus :9090, loki :3100, tempo :3200
+#     todos   → DNS (kube-system) :53
+#
+# A diferencia del stack apps, acá TODO es in-cluster (inclusive el "API del
+# cluster"), así que el aislamiento de EGRESS aplica igual en local y en
+# producción.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# Recpción del OTLP que envían las apps desde el namespace latiendita.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-alloy-otlp
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: alloy
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: latiendita
+      ports:
+        - port: 4317
+          protocol: TCP
+        - port: 4318
+          protocol: TCP
+---
+# Tráfico interno del stack (exportación, alertas, datasources de Grafana).
+# El origen es cualquier pod del mismo namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-ns
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - alertmanager
+          - prometheus
+          - loki
+          - tempo
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: latiendita-observability
+      ports:
+        - port: 9093
+          protocol: TCP
+        - port: 9090
+          protocol: TCP
+        - port: 3100
+          protocol: TCP
+        - port: 4317
+          protocol: TCP
+---
+# Scrape de Prometheus sobre el propio stack (lo declara el job
+# latiendita-observability de prometheus.k8s.yml, por POD IP).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-scrape
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - port: 9090
+          protocol: TCP
+        - port: 9093
+          protocol: TCP
+        - port: 3000
+          protocol: TCP
+        - port: 3100
+          protocol: TCP
+        - port: 3200
+          protocol: TCP
+        - port: 12345
+          protocol: TCP
+---
+# DNS hacia CoreDNS (kube-system).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+# Acceso al API del cluster desde Alloy (watch de pods + pods/log para
+# loki.source.kubernetes) y Prometheus (kubernetes_sd).
+#
+# El endpoint del API server no es portable entre distribuciones (IP/host
+# distinto en cada clúster), por eso el destino es "cualquier pod, :443" en
+# lugar de una IP fija. El namespaceSelector vacío matchea pods de cualquier
+# namespace DENTRO del clúster; el tráfico externo a :443 queda denegado.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-apiserver
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - alloy
+          - prometheus
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 443
+          protocol: TCP
+---
+# Exportación de Alloy: traces a Tempo y logs a Loki.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-alloy-egress
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: alloy
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: latiendita-observability
+      ports:
+        - port: 4317
+          protocol: TCP
+        - port: 3100
+          protocol: TCP
+---
+# El ruler de Loki dispara alertas de logs (latiendita-logs.yml) hacia
+# Alertmanager.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-loki-egress
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: loki
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: latiendita-observability
+      ports:
+        - port: 9093
+          protocol: TCP
+---
+# Prometheus: alertas hacia Alertmanager, scrape de las apps (pod IPs del
+# namespace latiendita) y del propio stack.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus-egress
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: latiendita-observability
+      ports:
+        - port: 9093
+          protocol: TCP
+        - port: 3000
+          protocol: TCP
+        - port: 3100
+          protocol: TCP
+        - port: 3200
+          protocol: TCP
+        - port: 12345
+          protocol: TCP
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: latiendita
+      ports:
+        - port: 8080
+          protocol: TCP
+---
+# Grafana consulta sus datasources (Prometheus, Loki y Tempo).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-grafana-egress
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: latiendita-observability
+      ports:
+        - port: 9090
+          protocol: TCP
+        - port: 3100
+          protocol: TCP
+        - port: 3200
+          protocol: TCP

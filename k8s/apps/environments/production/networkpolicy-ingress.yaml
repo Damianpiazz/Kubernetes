@@ -1,0 +1,33 @@
+# Acceso externo al gateway — SOLO el entorno production.
+#
+# El único punto de entrada al namespace de la aplicación es el Ingress hacia
+# el Service del gateway (:80 → targetPort 8080). El controlador corre en SU
+# propio namespace (no en latiendita), por eso el namespaceSelector usa el
+# label automático kubernetes.io/metadata.name.
+#
+# CHANGE-ME: reemplazar por el namespace real del controlador instalado en el
+# clúster, según el IngressClass elegido (coherente con ingressClassName del
+# Ingress):
+#   ingress-nginx (comunidad): namespace ingress-nginx
+#   traefik:                   namespace traefik-system
+#   cloud (ALB/GKE/Azure):     namespace del controlador managed correspondiente
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-controller
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: CHANGE-ME-ingress-nginx
+      ports:
+        - port: 8080
+          protocol: TCP

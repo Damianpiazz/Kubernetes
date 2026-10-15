@@ -1,0 +1,165 @@
+# Aislamiento de red del namespace de la aplicación (latiendita).
+#
+# Matriz de tráfico real (derivable de los configmaps de cada servicio):
+#
+#   gateway → auth/user/product/order/payment  :8080
+#   order   → product                          :8080
+#   payment → order                            :8080
+#   apps    → Postgres (auth/users/products/orders/payments-db) :5432
+#   apps    → kafka                            :9092
+#   apps    → alloy (ns latiendita-observability)                :4318   [OTLP]
+#   prometheus (ns latiendita-observability) → pods de apps     :8080
+#                                             [kubernetes_sd role=endpoints:
+#                                              scrapea las POD IPs directamente,
+#                                              no pasa por los Services]
+#   ingress controller (solo production) → gateway               :80
+#
+# Este archivo declara SOLO el aislamiento de INGRESS, que aplica igual en local
+# y en producción. El aislamiento de EGRESS es exclusivo de local
+# (environments/local/networkpolicy-egress.yaml): en producción las bases de
+# datos y Kafka son servicios gestionados con endpoints externos que no se
+# pueden declarar de forma portable.
+#
+# ADVERTENCIA sobre kind: la CNI por defecto de kind (kindnet) NO enforcea
+# NetworkPolicy, así que en local las políticas quedan declaradas pero no
+# forzadas (validación estructural). El `kubectl port-forward` del gateway no
+# se ve afectado en ningún caso: el kubelet inyecta ese tráfico fuera del
+# datapath del CNI. La CNI del clúster de producción sí debe enforcear
+# (Calico, Cilium, etc.); verificar con `kubectl get netpol -A` y un test real.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+# Tráfico este-oeste de la aplicación. Selectores explícitos (no "todo el
+# namespace"): si aparece un llamado nuevo entre servicios, esta matriz hay
+# que ampliarla a propósito.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-app-ingress
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - auth-service
+          - user-service
+          - product-service
+          - order-service
+          - payment-service
+  policyTypes:
+    - Ingress
+  ingress:
+    # El gateway enruta /api/auth, /api/users, /api/products, /api/orders y
+    # /api/payments hacia cada backend.
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: gateway
+      ports:
+        - port: 8080
+          protocol: TCP
+    # order-service consulta el stock vía REST (PRODUCT_SERVICE_BASE_URL).
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: order-service
+      ports:
+        - port: 8080
+          protocol: TCP
+    # payment-service confirma el estado del pedido vía REST
+    # (ORDER_SERVICE_BASE_URL).
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: payment-service
+      ports:
+        - port: 8080
+          protocol: TCP
+---
+# Tier de datos local: solo los pods de las apps pueden hablar con Postgres y
+# Kafka. En producción este tráfico sale del clúster (servicios gestionados) y
+# la política queda inerte.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-data-ingress
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - auth-db
+          - users-db
+          - products-db
+          - orders-db
+          - payments-db
+          - kafka
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - auth-service
+                  - user-service
+                  - product-service
+                  - order-service
+                  - payment-service
+                  - gateway
+      ports:
+        - port: 5432
+          protocol: TCP
+        - port: 9092
+          protocol: TCP
+---
+# Scrape de Prometheus: el kubernetes_sd role=endpoints apunta a las POD IPs
+# (no a los Services), por eso el destino son los pods de las apps en :8080
+# (targetPort http). Sin esta regla el default-deny deja TargetDown en el 100%.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-scrape
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - auth-service
+          - user-service
+          - product-service
+          - order-service
+          - payment-service
+          - gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: latiendita-observability
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - port: 8080
+          protocol: TCP

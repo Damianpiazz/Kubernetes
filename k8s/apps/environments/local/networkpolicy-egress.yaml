@@ -1,0 +1,124 @@
+# Aislamiento de EGRESS — SOLO el entorno local (kind / k3d).
+#
+# En local toda la infraestructura vive en el clúster (Postgres y Kafka son
+# StatefulSets del mismo namespace), así que se puede negar el tráfico saliente
+# y abrirlo punto por punto:
+#
+#   apps → DNS (kube-system)                    :53    [resolución corta: kafka, *-db]
+#   apps → Postgres / Kafka (mismo namespace)   :5432 / :9092
+#   apps → alloy (ns latiendita-observability)  :4318  [OTLP]
+#
+# Los pods de datos (Postgres/Kafka) no generan tráfico saliente; no reciben
+# permisos de egress y quedan sin salir del clúster.
+#
+# En producción NO se aplica: las bases de datos y Kafka son servicios
+# gestionados con endpoints externos, y un deny de egress los rompería sin
+# forma portable de declararlos (depende de la CNI: FQDN solo lo soportan
+# Cilium y similares).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-egress
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+---
+# DNS hacia CoreDNS (kube-system). Sin esto nada resuelve nombres cortos.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+# Salida de las apps hacia el tier de datos del mismo namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-app-egress-data
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - auth-service
+          - user-service
+          - product-service
+          - order-service
+          - payment-service
+          - gateway
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - auth-db
+                  - users-db
+                  - products-db
+                  - orders-db
+                  - payments-db
+                  - kafka
+      ports:
+        - port: 5432
+          protocol: TCP
+        - port: 9092
+          protocol: TCP
+---
+# Salida de las apps hacia Alloy (OTLP cross-namespace). FQDN en los
+# configmaps (alloy.latiendita-observability.svc…); acá se matchea por el
+# label del namespace destino + pods de Alloy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-app-egress-otlp
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - auth-service
+          - user-service
+          - product-service
+          - order-service
+          - payment-service
+          - gateway
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: latiendita-observability
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: alloy
+      ports:
+        - port: 4318
+          protocol: TCP
