@@ -30,7 +30,9 @@ import org.springframework.test.context.DynamicPropertySource;
         "gateway.ratelimit.default-capacity=1000",
         "gateway.ratelimit.default-refill-tokens=1000",
         "gateway.ratelimit.routes.auth.capacity=1000",
-        "gateway.ratelimit.routes.auth.refill-tokens=1000"
+        "gateway.ratelimit.routes.auth.refill-tokens=1000",
+
+        "gateway.cors.allowed-origins=http://localhost:3000"
 })
 @AutoConfigureTestRestTemplate
 class GatewayRoutingIntegrationTest {
@@ -115,6 +117,20 @@ class GatewayRoutingIntegrationTest {
     }
 
     @Test
+    void permiteSinTokenElCatalogoDeLectura() {
+        ResponseEntity<String> response = rest.getForEntity("/api/products", String.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).contains("\"stub\":true");
+    }
+
+    @Test
+    void rechazaSinTokenLaEscrituraDelCatalogo() {
+        ResponseEntity<String> response = rest.postForEntity("/api/products",
+                new HttpEntity<>(new HttpHeaders()), String.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
     void propagaElCorrelationId() {
         String token = TestJwtFactory.token(7);
         HttpHeaders headers = authHeaders(token);
@@ -130,7 +146,7 @@ class GatewayRoutingIntegrationTest {
     @Test
     void respondeElPreflightCorsSinToken() {
         HttpHeaders headers = new HttpHeaders();
-        headers.set(HttpHeaders.ORIGIN, "http://localhost:5173");
+        headers.set(HttpHeaders.ORIGIN, "http://localhost:3000");
         headers.set(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET");
         headers.setBearerAuth(TestJwtFactory.token(1));
 
@@ -139,7 +155,7 @@ class GatewayRoutingIntegrationTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getHeaders().getAccessControlAllowOrigin())
-                .isEqualTo("http://localhost:5173");
+                .isEqualTo("http://localhost:3000");
         assertThat(response.getHeaders().getAccessControlAllowCredentials()).isTrue();
     }
 

@@ -5,6 +5,7 @@ import javax.crypto.spec.SecretKeySpec;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -39,6 +40,8 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(PUBLIC_PATHS).permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/products/**", "/api/categories/**")
+                    .permitAll()
                 .anyRequest().authenticated())
             .oauth2ResourceServer(rs -> rs.jwt(jwt -> jwt.decoder(jwtDecoder(properties))));
         return http.build();
@@ -47,7 +50,7 @@ public class SecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource(CorsProperties properties) {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(properties.allowedOrigins());
+        config.setAllowedOriginPatterns(properties.allowedOrigins());
         config.setAllowedMethods(properties.allowedMethods());
         config.setAllowedHeaders(properties.allowedHeaders());
         config.setAllowCredentials(properties.allowCredentials());

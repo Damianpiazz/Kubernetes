@@ -18,7 +18,7 @@ Todas las rutas son relativas a la raíz del Gateway (ej. `http://gateway:8080`)
 |---|---|---|---|
 | `/api/auth/**` | `authService` | No (pública) | Login/registro/refresh |
 | `/api/users/**` | `userService` | Sí (JWT) | — |
-| `/api/products/**`, `/api/categories/**` | `productService` | Sí (JWT) | Una sola ruta con dos patterns |
+| `/api/products/**`, `/api/categories/**` | `productService` | GET: no; resto: sí (JWT) | Catálogo anónimo para la SPA; las escrituras exigen JWT |
 | `/api/orders/**` | `orderService` | Sí (JWT) | — |
 | `/api/payments/**` | `paymentService` | Sí (JWT) | — |
 | `/api/webhooks/**` | `paymentService` | No (pública) | Webhook de MP: firma HMAC propia |
@@ -71,10 +71,10 @@ Formato **ProblemDetail (RFC 7807)**, emitido por `GatewayErrorController` (mism
 | Capa | Detalle |
 |---|---|
 | Resource server | Spring Security `oauth2ResourceServer` con JWT **HS256**, mismo `JWT_SECRET`/`JWT_ISSUER` que emite `auth-service` |
-| Rutas públicas | `/api/auth/**`, `/api/webhooks/**`, `/actuator/health/**`, `/actuator/prometheus`, `/actuator/info` (`SecurityConfig.PUBLIC_PATHS`); **todo lo demás** —incluido el resto de `/actuator/**`— exige `Authorization: Bearer <jwt>` |
+| Rutas públicas | `/api/auth/**`, `/api/webhooks/**`, `GET /api/products/**` y `GET /api/categories/**` (catálogo de la SPA), `/actuator/health/**`, `/actuator/prometheus`, `/actuator/info` (`SecurityConfig`); **todo lo demás** —incluido el resto de `/actuator/**` y las escrituras del catálogo— exige `Authorization: Bearer <jwt>` |
 | Propagación de identidad | `IdentityPropagationFilter` inyecta `X-User-Id` con el `sub` y **elimina siempre** el header enviado por el cliente |
 | Rate limiting | `RateLimitFilter` (Resilience4j, in-memory): clave = `user:<sub>` si hay token, si no `ip:<ip>` |
-| CORS | `CorsConfigurationSource` dentro de la cadena de seguridad: el preflight `OPTIONS` se contesta sin JWT; con `allow-credentials=true` los orígenes se listan explícitamente |
+| CORS | `CorsConfigurationSource` dentro de la cadena de seguridad, con `allowedOriginPatterns` (permite `*` junto a `allow-credentials=true`): el preflight `OPTIONS` se contesta sin JWT; política por entorno — `*` en local, dominio exacto de Vercel en producción |
 | Estado | Sin sesiones (`STATELESS`), CSRF deshabilitado (API sin cookies) |
 
 > El rate limiting es **por instancia** (memoria): con N réplicas del Gateway el límite efectivo se multiplica por N. Deuda futura: contadores en Redis para un límite global.
@@ -108,7 +108,7 @@ Formato **ProblemDetail (RFC 7807)**, emitido por `GatewayErrorController` (mism
 | `GATEWAY_MAX_REQUEST_SIZE` | Tamaño máximo de `Content-Length` (bytes) | ❌ | `1048576` | `1048576` |
 | `GATEWAY_CONNECT_TIMEOUT_MS` | Timeout de conexión hacia el destino (ms) | ❌ | `2000` | `2000` |
 | `GATEWAY_READ_TIMEOUT_MS` | Timeout de respuesta hacia el destino (ms) | ❌ | `10000` | `10000` |
-| `CORS_ALLOWED_ORIGINS` | Orígenes permitidos (coma) | ❌ | `http://localhost:5173` | `https://tienda.com` |
+| `CORS_ALLOWED_ORIGINS` | Orígenes permitidos (coma; acepta patterns, p. ej. `*` en local) | ❌ | `http://localhost:3000` | `https://app.tienda.com` |
 | `CORS_ALLOWED_METHODS` | Métodos HTTP permitidos (coma) | ❌ | `GET,POST,PUT,PATCH,DELETE,OPTIONS` | `GET,POST` |
 | `CORS_ALLOWED_HEADERS` | Headers permitidos (coma) | ❌ | `Authorization,Content-Type,X-Correlation-Id` | `Authorization` |
 | `LOGGING_LEVEL_ROOT` | Nivel de log | ❌ | `INFO` | `INFO` |
@@ -163,7 +163,7 @@ No usa base de datos ni Kafka: no persiste nada.
 | `IdentityPropagationFilterTest` | Unit (Mock servlet + SecurityContext) | 3 | Inyección de `X-User-Id`, descarte del spoofeado, sin principal no setea |
 | `RateLimitFilterTest` | Unit (Resilience4j real) | 5 | Límite default, `429` + `Retry-After`, rutas exentas, limiter por ruta, clave por IP |
 | `RequestSizeLimitFilterTest` | Unit (Mock servlet) | 2 | Paso dentro del límite y `413` al superarlo |
-| `GatewayRoutingIntegrationTest` | Integración (stub HTTP del JDK) | 7 | `401` sin token, enrutamiento + `X-User-Id`, sanitización del spoof, ruta pública auth, correlación end-to-end, preflight CORS y origen rechazado |
+| `GatewayRoutingIntegrationTest` | Integración (stub HTTP del JDK) | 9 | `401` sin token, enrutamiento + `X-User-Id`, sanitización del spoof, ruta pública auth, catálogo anónimo (lectura OK / escritura `401`), correlación end-to-end, preflight CORS y origen rechazado |
 | `GatewayApplicationTests` | Context | 1 | Arranque de la aplicación |
 
 ```bash
