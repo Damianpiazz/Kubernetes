@@ -29,6 +29,7 @@ spec:
         app.kubernetes.io/name: grafana
         app.kubernetes.io/part-of: la-tiendita
     spec:
+      serviceAccountName: grafana
       securityContext:
         # La imagen corre como grafana (472:472).
         fsGroup: 472

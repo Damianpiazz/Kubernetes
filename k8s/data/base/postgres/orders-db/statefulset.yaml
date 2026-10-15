@@ -17,6 +17,9 @@ spec:
         app.kubernetes.io/name: orders-db
         app.kubernetes.io/part-of: la-tiendita
     spec:
+      # Postgres no habla con la API de Kubernetes: sin token de identidad
+      # montado (va con la SA default pero sin automount).
+      automountServiceAccountToken: false
       securityContext:
         fsGroup: 999
       containers:

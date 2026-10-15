@@ -17,6 +17,9 @@ spec:
         app.kubernetes.io/name: kafka
         app.kubernetes.io/part-of: la-tiendita
     spec:
+      # Kafka no habla con la API de Kubernetes: sin token de identidad
+      # montado (va con la SA default pero sin automount).
+      automountServiceAccountToken: false
       securityContext:
         fsGroup: 1000
       containers:

@@ -17,6 +17,7 @@ spec:
         app.kubernetes.io/name: loki
         app.kubernetes.io/part-of: la-tiendita
     spec:
+      serviceAccountName: loki
       securityContext:
         # La imagen corre como loki (10001:10001).
         fsGroup: 10001

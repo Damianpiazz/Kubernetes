@@ -22,6 +22,9 @@ spec:
         app.kubernetes.io/name: order-service
         app.kubernetes.io/part-of: la-tiendita
     spec:
+      # SA propio sin token de la API (ver serviceaccounts.yaml): la app no
+      # habla con la API de Kubernetes.
+      serviceAccountName: order-service
       # 5s de preStop (sleep) + hasta 30s de drenaje graceful + 5s de margen.
       terminationGracePeriodSeconds: 40
       securityContext:

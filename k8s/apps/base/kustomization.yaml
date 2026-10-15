@@ -6,6 +6,7 @@ namespace: latiendita
 resources:
   - namespace.yaml
   - observability-rbac.yaml
+  - serviceaccounts.yaml
   - networkpolicy.yaml
   - auth-service/configmap.yaml
   - auth-service/deployment.yaml

@@ -17,6 +17,7 @@ spec:
         app.kubernetes.io/name: alertmanager
         app.kubernetes.io/part-of: la-tiendita
     spec:
+      serviceAccountName: alertmanager
       securityContext:
         # La imagen corre como "nobody" (65534).
         fsGroup: 65534
