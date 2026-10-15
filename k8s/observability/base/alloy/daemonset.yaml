@@ -64,9 +64,13 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
+          # Liveness sobre /-/healthy (no sobre /-/ready como antes): readiness
+          # baja el pod del Service si no puede exportar; liveness solo debe
+          # reiniciarlo si el proceso se colgó. Un bache de Tempo/Loki no debe
+          # reciclar el DaemonSet de logs.
           livenessProbe:
             httpGet:
-              path: /-/ready
+              path: /-/healthy
               port: ui
             periodSeconds: 15
             timeoutSeconds: 3
