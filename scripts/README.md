@@ -92,10 +92,11 @@ valores aleatorios fuertes en lugar de los `changeme-*`, `CHANGE-ME-*` y
 |---|---|---|
 | `compose` | `.env.example` | `.env` (Docker Compose) |
 | `local` | `k8s/apps/environments/local/secrets.env.example` | `…/secrets.env` |
+| `observability-local` | `k8s/observability/environments/local/secrets.env.example` | `…/secrets.env` (Grafana dev) |
 | `apps` | `k8s/apps/environments/production/secrets.env.example` | `…/secrets.env` |
 | `observability` | `k8s/observability/environments/production/secrets.env.example` | `…/secrets.env` |
 | `production` | agrupa `apps` + `observability` | |
-| `todo` (default) | los cuatro anteriores | |
+| `todo` (default) | todos los anteriores | |
 
 **Reglas:**
 

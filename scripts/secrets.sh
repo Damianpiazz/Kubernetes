@@ -8,10 +8,11 @@ set -euo pipefail
 # pasos y mismo contrato de códigos de salida.
 #
 # Destinos (relativos a la raíz del repo):
-#   compose        .env.example                                                  -> .env
-#   local          k8s/apps/environments/local/secrets.env.example               -> .../secrets.env
-#   apps           k8s/apps/environments/production/secrets.env.example          -> .../secrets.env
-#   observability  k8s/observability/environments/production/secrets.env.example -> .../secrets.env
+#   compose               .env.example                                                  -> .env
+#   local                 k8s/apps/environments/local/secrets.env.example               -> .../secrets.env
+#   observability-local   k8s/observability/environments/local/secrets.env.example      -> .../secrets.env
+#   apps                  k8s/apps/environments/production/secrets.env.example          -> .../secrets.env
+#   observability         k8s/observability/environments/production/secrets.env.example -> .../secrets.env
 #
 # Reglas:
 #   - Nunca pisa un destino que ya existe, salvo --force (misma regla que kind-up).
@@ -38,14 +39,16 @@ Genera los archivos .env / secrets.env del repo desde sus plantillas .example,
 con valores aleatorios fuertes para las claves secretas.
 
 Destinos:
-  compose        .env.example  -> .env                                     (Docker Compose)
-  local          k8s/apps/environments/local/secrets.env.example           -> secrets.env
-  apps           k8s/apps/environments/production/secrets.env.example      -> secrets.env
-  observability  k8s/observability/environments/production/secrets.env...  -> secrets.env
+  compose               .env.example  -> .env                                     (Docker Compose)
+  local                 k8s/apps/environments/local/secrets.env.example           -> secrets.env
+  observability-local   k8s/observability/environments/local/secrets.env.example  -> secrets.env
+  apps                  k8s/apps/environments/production/secrets.env.example      -> secrets.env
+  observability         k8s/observability/environments/production/secrets.env...  -> secrets.env
 
 Opciones:
   -t, --target <id>   Qué destinos generar (por defecto: todo)
-                      Valores: todo, compose, local, production, apps, observability
+                      Valores: todo, compose, local, observability-local, production,
+                      apps, observability
       --force         Regenerar también los destinos que ya existen
       --check         Solo verifica; no escribe nada (salta con código 4 si hay
                       faltantes o valores de plantilla)
@@ -192,6 +195,7 @@ START_MS=$(now_ms)
 TARGETS=(
   'compose|.env.example|.env'
   'local|k8s/apps/environments/local/secrets.env.example|k8s/apps/environments/local/secrets.env'
+  'observability-local|k8s/observability/environments/local/secrets.env.example|k8s/observability/environments/local/secrets.env'
   'apps|k8s/apps/environments/production/secrets.env.example|k8s/apps/environments/production/secrets.env'
   'observability|k8s/observability/environments/production/secrets.env.example|k8s/observability/environments/production/secrets.env'
 )
@@ -332,11 +336,11 @@ done
 if (( $# > 0 )); then usage >&2; fail "argumento inesperado: $1"; fi
 
 case "$TARGET_SEL" in
-  todo)                        SELECTED_IDS=(compose local apps observability) ;;
+  todo)                        SELECTED_IDS=(compose local observability-local apps observability) ;;
   production)                  SELECTED_IDS=(apps observability) ;;
-  compose|local|apps|observability) SELECTED_IDS=("$TARGET_SEL") ;;
+  compose|local|observability-local|apps|observability) SELECTED_IDS=("$TARGET_SEL") ;;
   *) usage >&2; fail "target desconocido: $TARGET_SEL" 1 \
-       "targets válidos: todo, compose, local, production, apps, observability" ;;
+       "targets válidos: todo, compose, local, observability-local, production, apps, observability" ;;
 esac
 
 TOTAL_STEPS=3

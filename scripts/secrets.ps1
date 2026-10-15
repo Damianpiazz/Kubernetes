@@ -8,6 +8,7 @@
 
       compose        .env.example                                                  -> .env
       local          k8s/apps/environments/local/secrets.env.example               -> secrets.env
+      observability-local  k8s/observability/environments/local/secrets.env.example -> secrets.env
       apps           k8s/apps/environments/production/secrets.env.example          -> secrets.env
       observability  k8s/observability/environments/production/secrets.env.example -> secrets.env
 
@@ -21,7 +22,7 @@
 
 .PARAMETER Target
     Qué destinos generar. Por defecto: todo.
-    Valores: todo, compose, local, production, apps, observability.
+    Valores: todo, compose, local, observability-local, production, apps, observability.
 
 .PARAMETER Force
     Regenerar también los destinos que ya existen.
@@ -205,12 +206,14 @@ con valores aleatorios fuertes para las claves secretas.
 Destinos:
   compose        .env.example  -> .env                                     (Docker Compose)
   local          k8s/apps/environments/local/secrets.env.example           -> secrets.env
+  observability-local  k8s/observability/environments/local/secrets.env.example -> secrets.env
   apps           k8s/apps/environments/production/secrets.env.example      -> secrets.env
   observability  k8s/observability/environments/production/secrets.env...  -> secrets.env
 
 Opciones:
   -Target <id>   Qué destinos generar (por defecto: todo)
-                 Valores: todo, compose, local, production, apps, observability
+                 Valores: todo, compose, local, observability-local, production,
+                 apps, observability
   -Force         Regenerar también los destinos que ya existen
   -Check         Solo verifica; no escribe nada (salta con código 4 si hay
                  faltantes o valores de plantilla)
@@ -232,10 +235,11 @@ if ($Help) { Show-Usage; exit 0 }
 # --- Destinos ----------------------------------------------------------------
 # id | plantilla | destino
 $Targets = @(
-    [pscustomobject]@{ Id = 'compose';       Template = '.env.example';                                                  Dest = '.env' }
-    [pscustomobject]@{ Id = 'local';         Template = 'k8s/apps/environments/local/secrets.env.example';               Dest = 'k8s/apps/environments/local/secrets.env' }
-    [pscustomobject]@{ Id = 'apps';          Template = 'k8s/apps/environments/production/secrets.env.example';          Dest = 'k8s/apps/environments/production/secrets.env' }
-    [pscustomobject]@{ Id = 'observability'; Template = 'k8s/observability/environments/production/secrets.env.example'; Dest = 'k8s/observability/environments/production/secrets.env' }
+    [pscustomobject]@{ Id = 'compose';              Template = '.env.example';                                                  Dest = '.env' }
+    [pscustomobject]@{ Id = 'local';                Template = 'k8s/apps/environments/local/secrets.env.example';               Dest = 'k8s/apps/environments/local/secrets.env' }
+    [pscustomobject]@{ Id = 'observability-local';  Template = 'k8s/observability/environments/local/secrets.env.example';      Dest = 'k8s/observability/environments/local/secrets.env' }
+    [pscustomobject]@{ Id = 'apps';                 Template = 'k8s/apps/environments/production/secrets.env.example';          Dest = 'k8s/apps/environments/production/secrets.env' }
+    [pscustomobject]@{ Id = 'observability';        Template = 'k8s/observability/environments/production/secrets.env.example'; Dest = 'k8s/observability/environments/production/secrets.env' }
 )
 
 # --- Generación --------------------------------------------------------------
@@ -324,16 +328,17 @@ function Get-EnvIssues {
 
 # --- Opciones ----------------------------------------------------------------
 switch ($Target) {
-    'todo'         { $SelectedIds = @('compose', 'local', 'apps', 'observability') }
+    'todo'         { $SelectedIds = @('compose', 'local', 'observability-local', 'apps', 'observability') }
     'production'   { $SelectedIds = @('apps', 'observability') }
     'compose'      { $SelectedIds = @('compose') }
     'local'        { $SelectedIds = @('local') }
+    'observability-local'{ $SelectedIds = @('observability-local') }
     'apps'         { $SelectedIds = @('apps') }
     'observability'{ $SelectedIds = @('observability') }
     default {
         Show-Usage
         Stop-Script -Message "Target desconocido: $Target" `
-                    -Hint 'Targets válidos: todo, compose, local, production, apps, observability' -ExitCode 1
+                    -Hint 'Targets válidos: todo, compose, local, observability-local, production, apps, observability' -ExitCode 1
     }
 }
 

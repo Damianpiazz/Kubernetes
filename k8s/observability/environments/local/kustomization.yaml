@@ -14,13 +14,16 @@ namespace: latiendita-observability
 resources:
   - ../../base
 
-# Credenciales de DESARROLLO. En producción se reemplazan en
-# k8s/observability/environments/production.
+# Credenciales de DESARROLLO de Grafana. Viven en secrets.env (gitignored),
+# mismo patrón que el resto de los environments: se generan con
+# `scripts/secrets.* observability-local` desde secrets.env.example. En
+# producción se reemplazan en k8s/observability/environments/production.
+# Si secrets.env no existe, `kubectl kustomize` falla (no se rinde un
+# admin/admin commiteado).
 secretGenerator:
   - name: grafana-admin
-    literals:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+    envs:
+      - secrets.env
 
 generatorOptions:
   disableNameSuffixHash: true
