@@ -12,18 +12,21 @@ metadata:
 spec:
   # Reemplazar CHANGE-ME: ingressClassName del controlador instalado en el clúster
   # (nginx, traefik, gateway-api, etc.) y host DNS apuntando al balanceador.
+  # El frontend vive fuera del clúster (Vercel): este host expone SOLO la API,
+  # por eso el path es /api y no /.
   ingressClassName: CHANGE-ME
   tls:
     # El Secret lo crea y renueva cert-manager (no se commitea ni se genera con
-    # scripts/secrets.*). Mismo host que la regla de abajo.
+    # scripts/secrets.*). Mismo host que la regla de abajo. Vercel solo llama
+    # por https: sin este TLS la UI recibiría mixed content.
     - hosts:
-        - CHANGE-ME.example.com
+        - api.CHANGE-ME.example.com
       secretName: la-tiendita-tls
   rules:
-    - host: CHANGE-ME.example.com
+    - host: api.CHANGE-ME.example.com
       http:
         paths:
-          - path: /
+          - path: /api
             pathType: Prefix
             backend:
               service:

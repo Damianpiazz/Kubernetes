@@ -12,7 +12,9 @@ data:
   PRODUCT_SERVICE_BASE_URL: http://product-service
   ORDER_SERVICE_BASE_URL: http://order-service
   PAYMENT_SERVICE_BASE_URL: http://payment-service
-  CORS_ALLOWED_ORIGINS: http://localhost:5173
+  # Local (kind/k3d): cualquier origen. Producción lo sobrescribe con el
+  # dominio exacto del frontend (configMapGenerator del overlay).
+  CORS_ALLOWED_ORIGINS: "*"
   # Tracing: Alloy recibe el OTLP y lo reenvía a Tempo. Nombre FQDN porque
   # Alloy vive en el namespace latiendita-observability (cruza namespaces).
   OTLP_TRACING_ENDPOINT: http://alloy.latiendita-observability.svc.cluster.local:4318/v1/traces

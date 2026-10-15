@@ -98,7 +98,9 @@ configMapGenerator:
   - name: gateway-config
     behavior: merge
     literals:
-      - CORS_ALLOWED_ORIGINS=https://CHANGE-ME.example.com
+      # Dominio EXACTO del frontend en Vercel. Sin patrones: en producción no
+      # se aceptan previews ni ningún otro origen.
+      - CORS_ALLOWED_ORIGINS=https://CHANGE-ME.vercel.app
 
 # Secretos de la aplicación: mismo patrón que local (§8 de la doc).
 # secrets.env es gitignored y NO se commitea: copiar secrets.env.example y
