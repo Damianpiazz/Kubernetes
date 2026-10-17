@@ -82,6 +82,7 @@ Formato de respuesta de error: **ProblemDetail (RFC 7807)**, devuelto por `Globa
 | `404` | Not Found | Producto inexistente | `Producto no encontrado con id 42` |
 | `404` | Not Found | Categoría inexistente referenciada por un producto | `Categoría no encontrada con id 7` |
 | `409` | Conflict | SKU duplicado | `El SKU 'NB-LEN-001' ya está en uso` |
+| `409` | Conflict | Categoría duplicada | `La categoría 'Electrónica' ya existe` |
 | `409` | Conflict | Carrera entre escrituras (`@version`) | `El recurso fue modificado por otra operación; reintente la petición` |
 | `409` | Conflict | Violación de restricción única (carrera entre peticiones simultáneas) | `Violación de restricción única (posible carrera entre peticiones simultáneas)` |
 
@@ -111,7 +112,7 @@ Formato de respuesta de error: **ProblemDetail (RFC 7807)**, devuelto por `Globa
 | Campo | Tipo | PK | Nullable | Unique | Descripción |
 |---|---|---|---|---|---|
 | `id` | `bigint` (autoincrement) | ✅ | ❌ | ✅ | Identificador único |
-| `name` | `varchar(100)` | ❌ | ❌ | ❌ | Nombre de la categoría |
+| `name` | `varchar(100)` | ❌ | ❌ | ✅ | Nombre de la categoría (único) |
 | `description` | `varchar(500)` | ❌ | ✅ | ❌ | Descripción opcional |
 | `version` | `bigint` | ❌ | ❌ | ❌ | Control de concurrencia optimista (`@Version`) |
 
@@ -127,7 +128,7 @@ No hay relaciones JPA (`@ManyToOne`) en este servicio: se mantiene el desacoplam
 
 | Regla | Detalle |
 |---|---|
-| Unicidad | `sku` no puede repetirse (check previo + restricción única como red de seguridad); en update se ignora el propio ID (`existsBySkuAndIdNot`) |
+| Unicidad | `sku` no puede repetirse (check previo + restricción única como red de seguridad); en update se ignora el propio ID (`existsBySkuAndIdNot`). Ídem con el nombre de categoría (`existsByName` / `existsByNameAndIdNot`) → `409` |
 | FK de categoría | `categoryId` es opcional; si viene informado, la categoría debe existir → si no, `404` |
 | Alta/edición | Dos variantes de `PUT` (ID en body o en ruta) con la misma lógica de negocio |
 | Borrado | Borrado **físico** (por ahora no hay eventos de dominio) |
@@ -148,6 +149,8 @@ No hay relaciones JPA (`@ManyToOne`) en este servicio: se mantiene el desacoplam
 | `SPRING_DATASOURCE_PASSWORD` | Password de la base de datos | ✅ | — | *(secret)* |
 | `EUREKA_URL` | Registry de Eureka para registrarse | ❌ | `http://localhost:8761/eureka` | `http://eureka:8761/eureka` |
 | `EUREKA_ENABLED` | Habilita el cliente Eureka (`false` para correr sin registry) | ❌ | `true` | `true` |
+| `APP_SEED_ENABLED` | Habilita el seed de datos al arrancar (solo desarrollo) | ❌ | `false` | `true` |
+| `APP_SEED_LOCATION` | Directorio con los JSON de seed (vacío = classpath embebido en la imagen) | ❌ | *(vacío)* | `/datos/seed` |
 | `LOGGING_LEVEL_ROOT` | Nivel de log | ❌ | `INFO` | `INFO` |
 
 ### 5.2 Spring profiles
@@ -210,3 +213,22 @@ Ninguno actualmente. El patrón outbox + Kafka de `user-service`/`auth-service` 
 ```
 
 `TestProductServiceApplication` no es un test: es un launcher (`main`) que arranca la app con `TestcontainersConfiguration` para desarrollo local.
+
+---
+
+## 8. Seeders de desarrollo
+
+Carga inicial de datos desde JSON, pensada **solo para desarrollo local** (`compose.yaml` define `APP_SEED_ENABLED=true`; en producción la variable no existe y el runner ni se instancia gracias a `@ConditionalOnProperty`).
+
+| Archivo | Contenido |
+|---|---|
+| `src/main/resources/seed/categories.json` | Categorías de ropa (Remeras, Pantalones, Buzos, Zapatillas, Accesorios) |
+| `src/main/resources/seed/products.json` | Productos con `category` referenciado **por nombre** (no por ID) |
+
+Implementación: `seed/CatalogSeedRunner` (un `ApplicationRunner`).
+
+- **Idempotente (insert-only)**: categorías con guard por `name`, productos con guard por `sku`; si la fila ya existe, se omite — nunca actualiza datos existentes.
+- **Sin IDs hardcodeados**: cada producto resuelve su `categoryId` en runtime a partir del nombre de la categoría.
+- **Errores aislados**: una fila inválida se loguea (`[seed] ...`) y no detiene el resto de la carga.
+- **Orden garantizado**: primero categorías, luego productos (en un único runner).
+- **Ubicación externa**: `APP_SEED_LOCATION` apunta a un directorio en disco (p. ej. un ConfigMap montado en k8s) en lugar del classpath, permitiendo cambiar datos sin rebuild de la imagen.
