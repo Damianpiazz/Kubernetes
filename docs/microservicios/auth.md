@@ -152,6 +152,8 @@ Formato de respuesta de error: **ProblemDetail (RFC 7807)**, devuelto por `Globa
 | `OUTBOX_RELAY_MAX_ATTEMPTS` | Intentos máximos de publicación por evento | ❌ | `10` | `10` |
 | `EUREKA_URL` | Registry de Eureka para registrarse | ❌ | `http://localhost:8761/eureka` | `http://eureka:8761/eureka` |
 | `EUREKA_ENABLED` | Habilita el cliente Eureka (`false` para correr sin registry) | ❌ | `true` | `true` |
+| `APP_SEED_ENABLED` | Habilita el seed de cuentas al arrancar (solo desarrollo) | ❌ | `false` | `true` |
+| `APP_SEED_LOCATION` | Directorio con los JSON de seed (vacío = classpath embebido en la imagen) | ❌ | *(vacío)* | `/datos/seed` |
 | `LOGGING_LEVEL_ROOT` | Nivel de log | ❌ | `INFO` | `INFO` |
 
 > En k8s `JWT_SECRET` debe inyectarse como Secret; el default es solo para desarrollo.
@@ -219,3 +221,20 @@ Topic publicado: **`account-events`** (Kafka), clave = `id` de la cuenta. Public
 ```bash
 ./mvnw test
 ```
+
+---
+
+## 8. Seeders de desarrollo
+
+Carga inicial de cuentas desde JSON, pensada **solo para desarrollo local** (`compose.yaml` define `APP_SEED_ENABLED=true`; en producción la variable no existe y el runner ni se instancia gracias a `@ConditionalOnProperty`).
+
+| Archivo | Contenido |
+|---|---|
+| `src/main/resources/seed/accounts.json` | Cuentas de ejemplo (`email`, `username`, `password` en claro — datos de dev que se hashean con BCrypt al cargar) |
+
+Implementación: `seed/AccountSeedRunner` (un `ApplicationRunner`).
+
+- **Reusa el registro real**: llama a `AccountService.register()`, así que cada cuenta escribe `ACCOUNT_CREATED` en la outbox **en la misma transacción** — el seed es indistinguible de un registro por API.
+- **Idempotente (insert-only)**: guard por `email`/`username`; las cuentas existentes se omiten.
+- **Los usuarios no se seedean en `user-service`**: el relay publica a `account-events` y el consumer idempotente de `user-service` crea los perfiles solo. Esta es la única base que sí depende de Kafka para completarse.
+- **Ubicación externa**: `APP_SEED_LOCATION` apunta a un directorio en disco (p. ej. un ConfigMap montado en k8s) en lugar del classpath, permitiendo cambiar datos sin rebuild de la imagen.
