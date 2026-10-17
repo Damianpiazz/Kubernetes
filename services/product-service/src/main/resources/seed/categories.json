@@ -1,0 +1,7 @@
+[
+  { "name": "Remeras",     "description": "Remeras, polos y remerones" },
+  { "name": "Pantalones",  "description": "Jeans, joggers y pantalones formales" },
+  { "name": "Buzos",       "description": "Buzos y sudaderas con y sin capucha" },
+  { "name": "Zapatillas",  "description": "Calzado urbano y deportivo" },
+  { "name": "Accesorios",  "description": "Gorras, cinturones, medias y demás" }
+]
