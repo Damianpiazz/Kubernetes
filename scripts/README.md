@@ -19,20 +19,19 @@ una u otra es cuestión de entorno, no de funcionalidad.
 > Los `.sh` no tienen bit de ejecución en Windows: correrlos como `bash scripts/<nombre>.sh`
 > (o `./<nombre>.sh` en Linux/macOS si se les da permiso).
 
+Vista rápida de la CLI de cada script (los dos primeros pasos, en modo
+verificación — no levantan nada):
+
 ```bash
 # bash
 bash scripts/install-tools.sh --check
 bash scripts/secrets.sh --check
-bash scripts/kind-up.sh
-bash scripts/deploy.sh -s k8s/apps/environments/local/secrets.env k8s/apps/environments/local
 ```
 
 ```powershell
 # PowerShell
 .\scripts\install-tools.ps1 -Check
 .\scripts\secrets.ps1 -Check
-.\scripts\kind-up.ps1
-.\scripts\deploy.ps1 -s k8s/apps/environments/local/secrets.env k8s/apps/environments/local
 ```
 
 > En PowerShell, `install-tools.ps1`, `deploy.ps1` y `secrets.ps1` aceptan `-Help`
@@ -44,17 +43,94 @@ bash scripts/deploy.sh -s k8s/apps/environments/local/secrets.env k8s/apps/envir
 > Get-Help .\scripts\kind-up.ps1 -Full
 > ```
 
-## Flujo típico
+## Orden de ejecución
+
+Para levantar el entorno **desde cero**, el orden es este y ningún otro:
 
 ```text
-1. install-tools   →  docker, kubectl, kind (+ git) listos
-2. secrets         →  .env y secrets.env con valores aleatorios fuertes
-3. kind-up         →  clúster kind + secrets + imágenes + manifests + pods listos
-4. deploy          →  re-despliegues puntuales sobre lo que ya corre
+1. install-tools   →  docker, kubectl, kind (+ git) listos        [requerido]
+2. secrets         →  .env y secrets.env con valores fuertes      [recomendado]
+3. kind-up         →  clúster + build + manifests + pods listos   [requerido]
+4. (observabilidad) → Prometheus/Grafana/Loki/…  aparte, a mano   [opcional]
 ```
 
-`kind-up` **no despliega observabilidad**: Prometheus/Grafana/Loki/Tempo/Alloy/Alertmanager
-se aplican aparte con `kubectl apply -k k8s/observability/environments/local`.
+`deploy` y `build-images` **no van en esta secuencia**: son herramientas de
+mantenimiento sobre un entorno que ya existe. Ver
+[Después del primer levantamiento](#después-del-primer-levantamiento).
+
+### 1 · install-tools — siempre primero
+
+Todo lo demás depende de `docker`, `kubectl` y `kind`. Si faltan, `kind-up`
+falla en su paso 1 (código `2`) y `deploy` ni siquiera puede hablar con el
+clúster. Corre una sola vez por máquina; con `--check` / `-Check` solo verifica.
+
+### 2 · secrets — antes que `kind-up` (pero opcional)
+
+`kind-up` crea `k8s/apps/environments/local/secrets.env` desde su `.example`
+si no existe, con **valores de desarrollo**. `secrets` lo que aporta son
+valores **fuertes y aleatorios** (y genera los demás targets, incluidos los de
+producción, que no existen hasta que se generan).
+
+- ¿Nunca corriste `secrets`? `kind-up` igual funciona, pero con credenciales
+  de desarrollo.
+- ¿Vas a desplegar a producción? `secrets` es **obligatorio**: `deploy` sale
+  con código `6` mientras queden valores de plantilla.
+
+Nunca pisa un archivo ya existente (salvo `--force`), así que correrlo dos
+veces es inofensivo.
+
+### 3 · kind-up — el que realmente levanta todo
+
+Un solo comando hace el trabajo pesado en 8 pasos internos: crea (o reutiliza)
+el clúster kind, genera secrets si faltan, **construye las imágenes** (build
+embebido, no invoca a `build-images`), las carga con `kind load`, aplica los
+manifests y espera a que StatefulSets y Deployments queden listos.
+
+Si el clúster ya existe, lo reutiliza: es seguro correrlo de nuevo.
+
+### 4 · Observabilidad — aparte, a mano
+
+`kind-up` **no** despliega Prometheus/Grafana/Loki/Tempo/Alloy/Alertmanager.
+Se aplican cuando haga falta, con:
+
+```bash
+kubectl apply -k k8s/observability/environments/local
+```
+
+### Después del primer levantamiento
+
+| Querés… | Usá |
+|---|---|
+| Re-aplicar manifests / cambiar configuración | `deploy` sobre `k8s/apps/environments/local` |
+| Reconstruir una o varias imágenes | `build-images` (y después `deploy`, o `kind-up --skip-build` / `-SkipBuild`) |
+| Levantar todo de cero de nuevo | `kind-up` (reutiliza el clúster) |
+| Validar sin tocar el clúster | `deploy --dry-run` o `secrets --check` |
+
+`build-images` solo hace falta si vas a usar `kind-up --skip-build` /
+`-SkipBuild` (para cargar imágenes ya construidas) o si querés ver el detalle
+y tiempos de build por servicio: `kind-up` ya construye todo lo que hace
+falta por su cuenta.
+
+## Copiar y pegar: de cero a corriendo
+
+```bash
+# bash — desde la raíz del repo
+bash scripts/install-tools.sh
+bash scripts/secrets.sh
+bash scripts/kind-up.sh
+kubectl apply -k k8s/observability/environments/local   # opcional
+```
+
+```powershell
+# PowerShell — desde la raíz del repo
+.\scripts\install-tools.ps1
+.\scripts\secrets.ps1
+.\scripts\kind-up.ps1
+kubectl apply -k k8s/observability/environments/local   # opcional
+```
+
+Los ejemplos con `--check` / `-Check` de la sección anterior son para
+**verificar sin instalar ni generar nada**, no para el primer levantamiento.
 
 ---
 
