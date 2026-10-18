@@ -9,6 +9,7 @@ Automatización del entorno local y de los despliegues de La Tiendita.
 | `scripts/install-tools.sh` | `scripts/install-tools.ps1` | Verifica (e instala) las herramientas del entorno |
 | `scripts/secrets.sh` | `scripts/secrets.ps1` | Genera los `.env` / `secrets.env` desde sus plantillas |
 | `scripts/kind-up.sh` | `scripts/kind-up.ps1` | Levanta el entorno local completo sobre kind |
+| `scripts/kind-down.sh` | `scripts/kind-down.ps1` | Limpia el entorno local de kind (clúster, imágenes) |
 | `scripts/build-images.sh` | `scripts/build-images.ps1` | Construye las imágenes Docker de los servicios |
 | `scripts/deploy.sh` | `scripts/deploy.ps1` | Aplica manifests de Kubernetes de forma idempotente |
 
@@ -35,9 +36,9 @@ bash scripts/secrets.sh --check
 ```
 
 > En PowerShell, `install-tools.ps1`, `deploy.ps1` y `secrets.ps1` aceptan `-Help`
-> (o `-h`). `kind-up.ps1` y `build-images.ps1` no tienen interruptor de ayuda: usan
-> el help integrado de PowerShell, que trae lo mismo (descripción, parámetros y
-> ejemplos):
+> (o `-h`). `kind-up.ps1`, `kind-down.ps1` y `build-images.ps1` no tienen
+> interruptor de ayuda: usan el help integrado de PowerShell, que trae lo mismo
+> (descripción, parámetros y ejemplos):
 >
 > ```powershell
 > Get-Help .\scripts\kind-up.ps1 -Full
@@ -239,6 +240,51 @@ Levanta el entorno local completo en 8 pasos:
 
 ---
 
+## kind-down
+
+Limpia el entorno local que `kind-up` dejó levantado, en 7 pasos. **Es
+destructivo y no tiene vuelta atrás.**
+
+1. **Preflight** — `docker` y `kind` presentes y daemon activo (`kubectl`
+   opcional: solo se usa para limpiar el contexto).
+2. **Inventario** — lista exactamente qué se va a borrar: clúster, contenedores
+   de nodo, contexto de kubeconfig e imágenes, con el tamaño total.
+3. **Confirmación** — avisa que los volúmenes de Postgres/Kafka viven **dentro
+   del nodo de kind** y se destruyen para siempre, y pide `s`. Con `-DryRun`
+   termina acá sin tocar nada; con `-Yes` no pregunta.
+4. **Clúster kind** — `kind delete cluster`, los contenedores de nodo que
+   quedaron y la entrada de contexto en kubeconfig.
+5. **Imágenes** — borra `latiendita/<servicio>:<tag>`.
+6. **Build cache** — solo si se pidió `-Cache`.
+7. **Verificación** — confirma que no quedó nada y reporta el espacio liberado.
+
+Es idempotente: si no hay nada que limpiar, lo dice y sale con `0`.
+
+| bash | PowerShell | Default |
+|---|---|---|
+| `-c`, `--cluster <nombre>` | `-ClusterName` | `latiendita-dev` (contexto `kind-latiendita-dev`) |
+| `-t`, `--tag <tag>` | `-Tag` | `dev` |
+| `--keep-images` | `-KeepImages` | se borran |
+| `--cache` | `-Cache` | se conserva |
+| `-y`, `--yes` | `-Yes` | pide confirmación |
+| `-d`, `--dry-run` | `-DryRun` | limpieza real |
+| `-h`, `--help` | — | — |
+
+```bash
+bash scripts/kind-down.sh --dry-run    # ver qué se borraría, sin borrar nada
+bash scripts/kind-down.sh --yes        # limpiar todo sin preguntar
+```
+
+```powershell
+.\scripts\kind-down.ps1 -DryRun
+.\scripts\kind-down.ps1 -Yes -Cache
+```
+
+> `--cache` / `-Cache` es opt-in a propósito: limpiar la build cache te obliga a
+> un cold rebuild de los 6 servicios la próxima vez que corras `kind-up`.
+
+---
+
 ## build-images
 
 Construye `latiendita/<servicio>:<tag>` para cada servicio de `services/`, muestra el
@@ -324,6 +370,7 @@ Iguales en `.sh` y `.ps1`; pensados para usarlos desde CI o con `$?` / `$LASTEXI
 | `secrets` | `1` uso o target desconocido · `2` falta una plantilla `.example` · `3` escritura falló · `4` `--check` con faltantes o valores de plantilla |
 | `build-images` | `1` uso · `2` docker no disponible · `3` build fallido |
 | `kind-up` | `1` uso · `2` herramientas · `3` clúster · `4` secrets · `5` imágenes · `6` apply · `7` rollout · `8` pods |
+| `kind-down` | `1` uso · `2` herramientas · `3` confirmación rechazada · `4` clúster o nodo · `5` imágenes · `6` build cache · `7` quedaron recursos |
 | `deploy` | `1` uso · `2` secrets · `3` apply · `4` no ready · `5` claves faltantes · `6` valores de plantilla en target `production` |
 
 ---
@@ -352,7 +399,7 @@ Iguales en `.sh` y `.ps1`; pensados para usarlos desde CI o con `$?` / `$LASTEXI
 
 ```bash
 bash -n scripts/install-tools.sh && bash -n scripts/secrets.sh && bash -n scripts/kind-up.sh \
-  && bash -n scripts/build-images.sh && bash -n scripts/deploy.sh
+  && bash -n scripts/kind-down.sh && bash -n scripts/build-images.sh && bash -n scripts/deploy.sh
 ```
 
 ```powershell
@@ -363,9 +410,10 @@ Get-ChildItem scripts\*.ps1 | ForEach-Object {
 }
 ```
 
-Y una corrida real que no toca el clúster: `--help` / `-Help` en cualquiera, y
+Y una corrida real que no toca el clúster: `--help` / `-Help` en cualquiera,
 `--check` / `-Check` en `install-tools` y `secrets` (`secrets --check` además
-no escribe nada).
+no escribe nada), y `--dry-run` / `-DryRun` en `kind-down` y `deploy` (solo
+informan, no borran ni aplican nada).
 
 ## Referencias
 
