@@ -227,6 +227,28 @@ kubectl rollout restart ds/alloy -n latiendita-observability
 | `kubectl drain <node> --ignore-daemonsets` | Saca pods del nodo (requiere --force si hay PV) | `kubectl cordon <node>` para evitar nuevos pods |
 | `kubectl scale deploy/gateway --replicas=0 -n latiendita` | Corta el tráfico | `kubectl rollout restart` para un bounce |
 
+### Limpieza manual a cero (kind + Docker)
+
+Para arrancar de cero cuando el entorno quedó inconsistente: clúster kind muerto,
+contexto huérfano en kubeconfig, volúmenes sin uso. **Ningún paso es reversible.**
+
+| # | Comando | Qué borra |
+|---|---|---|
+| 1 | `kind delete cluster --name latiendita-dev` | Los nodos de kind **y** las entradas `kind-latiendita-dev` de contexto, clúster y usuario en kubeconfig. Idempotente: funciona aunque el clúster ya no exista |
+| 2 | `kubectl config get-contexts` | Verificación: debe quedar vacío. Si queda algo suelto: `kubectl config delete-context <nombre>`, `kubectl config delete-cluster <nombre>`, `kubectl config delete-user <nombre>` |
+| 3 | `docker volume prune -a` | **Todos** los volúmenes nombrados (los `la-tiendita_*` de compose y los de otros proyectos). Sin `-a` solo borra los anónimos |
+| 4 | `docker system prune -a --volumes` | Contenedores detenidos, imágenes no referenciadas, redes sin uso, build cache y volúmenes anónimos |
+| 5 | `docker system df` | Verificación: todo en `0B`. `docker volume ls` y `kind get clusters` deben venir vacíos |
+
+> **Qué se pierde**: los datos locales de Postgres/Kafka viven en los volúmenes
+> `la-tiendita_*` (compose) y dentro del propio nodo de kind (k8s); los dos pasos
+> 1 y 3 los destruyen. `docker volume prune -a` también borra volúmenes de
+> **otros proyectos** de la máquina.
+>
+> **Limpieza acotada** (solo este repo, sin tocar nada de otros proyectos):
+> `scripts/kind-down.ps1` (o `.sh`) para el clúster, `docker compose down -v`
+> para los volúmenes de compose.
+
 ## 10. Checklist de salud
 
 Antes de decir "está funcionando", verificar:
