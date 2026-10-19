@@ -1,0 +1,12 @@
+[
+  { "title": "Remera básica blanca",      "sku": "REM-BAS-BLA", "price": 12999.00, "quantity": 50, "category": "Remeras",    "imageUrl": null },
+  { "title": "Remera oversize negra",     "sku": "REM-OVS-NEG", "price": 15999.00, "quantity": 35, "category": "Remeras",    "imageUrl": null },
+  { "title": "Jean straight fit azul",    "sku": "JEA-STR-AZU", "price": 34999.00, "quantity": 30, "category": "Pantalones", "imageUrl": null },
+  { "title": "Jogger tapering gris",      "sku": "JOG-TAP-GRI", "price": 25999.00, "quantity": 25, "category": "Pantalones", "imageUrl": null },
+  { "title": "Buzo con capucha verde",    "sku": "BUZ-CAP-VER", "price": 29999.00, "quantity": 20, "category": "Buzos",      "imageUrl": null },
+  { "title": "Sudadera crew flanela",     "sku": "SUD-CRE-FLA", "price": 27999.00, "quantity": 22, "category": "Buzos",      "imageUrl": null },
+  { "title": "Zapatillas urbanas negras", "sku": "ZAP-URB-NEG", "price": 59999.00, "quantity": 18, "category": "Zapatillas", "imageUrl": null },
+  { "title": "Zapatillas runner blancas", "sku": "ZAP-RUN-BLA", "price": 64999.00, "quantity": 15, "category": "Zapatillas", "imageUrl": null },
+  { "title": "Gorra clásica negra",       "sku": "GOR-CLA-NEG", "price": 9999.00,  "quantity": 40, "category": "Accesorios", "imageUrl": null },
+  { "title": "Cinturón cuero café",       "sku": "CIN-CUE-CAF", "price": 14999.00, "quantity": 20, "category": "Accesorios", "imageUrl": null }
+]

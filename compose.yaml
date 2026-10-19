@@ -194,6 +194,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET en .env}
       EUREKA_URL: http://eureka-server:8761/eureka
+      APP_SEED_ENABLED: "true"
     depends_on:
       auth-db:
         condition: service_healthy
@@ -247,6 +248,7 @@ services:
       SPRING_DATASOURCE_USERNAME: products
       SPRING_DATASOURCE_PASSWORD: ${PRODUCTS_DB_PASSWORD:?Defina PRODUCTS_DB_PASSWORD en .env}
       EUREKA_URL: http://eureka-server:8761/eureka
+      APP_SEED_ENABLED: "true"
     depends_on:
       products-db:
         condition: service_healthy

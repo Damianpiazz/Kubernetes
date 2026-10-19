@@ -3,6 +3,7 @@ package com.latiendita.productService.category;
 import com.latiendita.productService.category.dto.CategoryDto;
 import com.latiendita.productService.category.dto.CategoryMapper;
 import com.latiendita.productService.exception.CategoryNotFoundException;
+import com.latiendita.productService.exception.DuplicateCategoryException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -19,6 +20,10 @@ public class CategoryService {
     private final CategoryRepository categoryRepository;
 
     public CategoryDto create(CategoryDto dto) {
+        if (categoryRepository.existsByName(dto.name())) {
+            throw new DuplicateCategoryException(dto.name());
+        }
+
         CategoryEntity saved = categoryRepository.save(CategoryEntity.builder()
                 .name(dto.name())
                 .description(dto.description())
@@ -29,6 +34,11 @@ public class CategoryService {
 
     public CategoryDto update(Long id, CategoryDto dto) {
         CategoryEntity category = findEntity(id);
+
+        boolean nameChanged = !category.getName().equals(dto.name());
+        if (nameChanged && categoryRepository.existsByNameAndIdNot(dto.name(), id)) {
+            throw new DuplicateCategoryException(dto.name());
+        }
 
         category.setName(dto.name());
         category.setDescription(dto.description());

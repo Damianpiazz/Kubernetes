@@ -1,0 +1,17 @@
+[
+  {
+    "email": "admin@latiendita.com",
+    "username": "admin",
+    "password": "Admin1234!"
+  },
+  {
+    "email": "juan.perez@latiendita.com",
+    "username": "juanperez",
+    "password": "Password1!"
+  },
+  {
+    "email": "maria.gomez@latiendita.com",
+    "username": "mariagomez",
+    "password": "Password1!"
+  }
+]
