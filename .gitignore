@@ -23,6 +23,7 @@ Thumbs.db
 
 # Herramientas
 .atl
+opencode.json
 
 # Secretos de Kubernetes (generar desde secrets.env.example)
 # Patrón global: cubre cualquier environment actual o futuro de cualquier stack.
