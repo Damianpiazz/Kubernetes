@@ -7,6 +7,7 @@
 #   apps → DNS (kube-system)                    :53    [resolución corta: kafka, *-db]
 #   apps → Postgres / Kafka (mismo namespace)   :5432 / :9092
 #   apps → alloy (ns latiendita-observability)  :4318  [OTLP]
+#   apps → backends (proxy del gateway, order→product, payment→order) :8080
 #
 # Los pods de datos (Postgres/Kafka) no generan tráfico saliente; no reciben
 # permisos de egress y quedan sin salir del clúster.
@@ -86,6 +87,66 @@ spec:
         - port: 5432
           protocol: TCP
         - port: 9092
+          protocol: TCP
+---
+# Tráfico este-oeste entre servicios: el espejo de allow-app-ingress (base).
+# NetworkPolicy exige que AMBOS extremos permitan el flujo; sin esta política
+# el default-deny-egress corta el proxy del gateway hacia los backends y las
+# llamadas REST entre servicios (order→product, payment→order). Síntoma
+# engañoso: el gateway contesta 401 vía /error cuando el backend no responde.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-app-egress-east-west
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - auth-service
+          - user-service
+          - product-service
+          - order-service
+          - payment-service
+          - gateway
+  policyTypes:
+    - Egress
+  egress:
+    # El gateway enruta /api/auth, /api/users, /api/products, /api/orders y
+    # /api/payments hacia cada backend.
+    - to:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - auth-service
+                  - user-service
+                  - product-service
+                  - order-service
+                  - payment-service
+      ports:
+        - port: 8080
+          protocol: TCP
+    # order-service consulta el stock vía REST (PRODUCT_SERVICE_BASE_URL).
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: product-service
+      ports:
+        - port: 8080
+          protocol: TCP
+    # payment-service confirma el estado del pedido vía REST
+    # (ORDER_SERVICE_BASE_URL).
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: order-service
+      ports:
+        - port: 8080
           protocol: TCP
 ---
 # Salida de las apps hacia Alloy (OTLP cross-namespace). FQDN en los

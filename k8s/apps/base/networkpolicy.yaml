@@ -20,12 +20,14 @@
 # datos y Kafka son servicios gestionados con endpoints externos que no se
 # pueden declarar de forma portable.
 #
-# ADVERTENCIA sobre kind: la CNI por defecto de kind (kindnet) NO enforcea
-# NetworkPolicy, así que en local las políticas quedan declaradas pero no
-# forzadas (validación estructural). El `kubectl port-forward` del gateway no
-# se ve afectado en ningún caso: el kubelet inyecta ese tráfico fuera del
-# datapath del CNI. La CNI del clúster de producción sí debe enforcear
-# (Calico, Cilium, etc.); verificar con `kubectl get netpol -A` y un test real.
+# ADVERTENCIA sobre kind: aunque kindnet no documenta soporte de NetworkPolicy,
+# en kind v0.33.0 se verificó empíricamente que las políticas SÍ cortan tráfico
+# (un egress faltante rompía el este-oeste entre pods con timeouts exactamente
+# sobre la matriz declarada). Tratar las políticas como efectivas en local.
+# El `kubectl port-forward` del gateway no se ve afectado en ningún caso: el
+# kubelet inyecta ese tráfico fuera del datapath del CNI. La CNI del clúster de
+# producción sí debe enforcear (Calico, Cilium, etc.); verificar con
+# `kubectl get netpol -A` y un test real.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
