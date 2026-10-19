@@ -238,13 +238,15 @@ done_step "herramientas listas"
 
 # --- 2. Clúster --------------------------------------------------------------
 step "Clúster kind"
-run_tool kubectl config get-contexts -o name
-HAS_CONTEXT=0
-while IFS= read -r ctx; do
-  if [[ "$ctx" == "$CONTEXT" ]]; then HAS_CONTEXT=1; break; fi
+# La existencia se mide contra kind, no contra kubeconfig: un contexto puede
+# quedar huérfano (prune del daemon, kill del nodo) y haría fallar cluster-info.
+run_tool kind get clusters
+HAS_CLUSTER=0
+while IFS= read -r c; do
+  if [[ "$c" == "$CLUSTER_NAME" ]]; then HAS_CLUSTER=1; break; fi
 done <<< "$TOOL_OUT"
 
-if (( HAS_CONTEXT == 0 )); then
+if (( HAS_CLUSTER == 0 )); then
   note "creando clúster '$CLUSTER_NAME' (puede tardar varios minutos la primera vez)..."
   rc=0
   kind create cluster --name "$CLUSTER_NAME" || rc=$?
@@ -253,6 +255,11 @@ if (( HAS_CONTEXT == 0 )); then
   fi
 else
   note "reutilizando clúster existente '$CLUSTER_NAME'"
+  # El contexto puede faltar aunque el clúster viva: se reimporta antes de probar.
+  run_tool kind export kubeconfig --name "$CLUSTER_NAME"
+  if (( TOOL_RC != 0 )); then
+    fail "No se pudo exportar el kubeconfig de '$CLUSTER_NAME'." 3 "Revisar el log de kind arriba."
+  fi
   run_tool kubectl cluster-info --context "$CONTEXT"
   if (( TOOL_RC != 0 )); then
     fail "El clúster '$CLUSTER_NAME' existe pero no responde." 3 \

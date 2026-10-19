@@ -237,10 +237,12 @@ Complete-Step 'herramientas listas'
 
 # --- 2. Clúster --------------------------------------------------------------
 Start-Step 2 $TotalSteps 'Clúster kind'
-$existing = Invoke-Tool 'kubectl' @('config', 'get-contexts', '-o', 'name')
-$hasContext = @($existing.Lines) -contains $Context
+# La existencia se mide contra kind, no contra kubeconfig: un contexto puede
+# quedar huérfano (prune del daemon, kill del nodo) y haría fallar cluster-info.
+$clusters = Invoke-Tool 'kind' @('get', 'clusters')
+$hasCluster = @($clusters.Lines) -contains $ClusterName
 
-if (-not $hasContext) {
+if (-not $hasCluster) {
     Write-Note ("creando clúster '{0}' (puede tardar varios minutos la primera vez)..." -f $ClusterName)
     & kind create cluster --name $ClusterName
     if ($LASTEXITCODE -ne 0) {
@@ -249,6 +251,12 @@ if (-not $hasContext) {
     }
 } else {
     Write-Note ("reutilizando clúster existente '{0}'" -f $ClusterName)
+    # El contexto puede faltar aunque el clúster viva: se reimporta antes de probar.
+    $export = Invoke-Tool 'kind' @('export', 'kubeconfig', '--name', $ClusterName)
+    if ($export.ExitCode -ne 0) {
+        Stop-Script -Message ("No se pudo exportar el kubeconfig de '{0}'." -f $ClusterName) `
+                    -Hint 'Revisar el log de kind arriba.' -ExitCode 3
+    }
     $info = Invoke-Tool 'kubectl' @('cluster-info', '--context', $Context)
     if ($info.ExitCode -ne 0) {
         Stop-Script -Message ("El clúster '{0}' existe pero no responde." -f $ClusterName) `
