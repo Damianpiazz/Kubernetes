@@ -9,6 +9,7 @@ Para otras tareas:
 | Querés… | Ir a |
 |---|---|
 | Operar el clúster (`kubectl`, logs, rollouts, debug) | [`comandos.md`](./comandos.md) |
+| La red en detalle (NetworkPolicy, Services, DNS, Ingress) | [`red.md`](./red.md) |
 | La estructura breve de `k8s/` y sus reglas | [`k8s/README.md`](../../k8s/README.md) |
 | Usar los scripts (`.sh` / `.ps1`) y sus códigos de salida | [`scripts/README.md`](../../scripts/README.md) |
 | Detalle de cada microservicio | [`docs/microservicios/`](../microservicios/) |
@@ -384,16 +385,20 @@ MERCADO_PAGO_WEBHOOK_SECRET=        # opcional
 
 ## 10. Red y puntos de entrada
 
+> El detalle completo (matriz de NetworkPolicy política por política, Services
+> y DNS, flujo este-oeste, cross-namespace hacia observabilidad y diferencias
+> con Docker Compose) está en [`red.md`](./red.md). Esta sección es el resumen.
+
 | Concepto | Implementación |
 |---|---|
 | Service de app | `ClusterIP`, `port: 80 → targetPort: http (8080)` en los 6 servicios |
 | Service de datos | Headless (`clusterIP: None`) para DNS estable de StatefulSets |
 | DNS interna | `<svc>.<namespace>.svc.cluster.local` (FQDN usado para cruzar hacia Alloy) |
 | Local | `kubectl port-forward svc/gateway 8080:80 -n latiendita` |
-| Producción (apps) | Ingress → `gateway:80`, path `/` (Prefix), con `tls:` vía cert-manager |
+| Producción (apps) | Ingress → `gateway:80`, path `/api` (Prefix), con `tls:` vía cert-manager |
 | Producción (Grafana) | Ingress en **host propio** (`grafana.CHANGE-ME.example.com`) con `tls:` vía cert-manager, deliberadamente no bajo `/grafana` del host de las apps: evita el modo subpath de Grafana (`GF_SERVER_ROOT_URL` + `SERVE_FROM_SUB_PATH`), propenso a romper assets |
 | CORS | Configurado en el gateway (`CORS_ALLOWED_ORIGINS`), no con NetworkPolicy |
-| NetworkPolicy | Default-deny + matriz explícita en ambos stacks (ver §10.1). La CNI de kind no la aplica |
+| NetworkPolicy | Default-deny + matriz explícita en ambos stacks (ver §10.1 y [`red.md`](./red.md)). En kind v0.33.0 se verificó empíricamente que kindnet sí corta tráfico |
 | TLS | cert-manager + Let's Encrypt (HTTP-01) en producción (ver §10.2) |
 | HPA | **No hay** (ver §15) |
 
@@ -404,12 +409,16 @@ comentario (todo lo que se permite está enumerado punto por punto):
 
 - **`k8s/apps/base/networkpolicy.yaml`** — aislamiento de **ingress** (aplica en
   local y producción): este-oeste (gateway → backends, order → product,
-  payment → order), apps → tier de datos, apps → Alloy (OTLP cross-namespace),
-  Prometheus → pods de apps (el `kubernetes_sd role=endpoints` scrapea pod IPs,
-  no Services: sin esa regla el scrape cae entero).
+  payment → order), apps → tier de datos, Prometheus → pods de apps (el
+  `kubernetes_sd role=endpoints` scrapea pod IPs, no Services: sin esa regla
+  el scrape cae entero). El lado receptor del OTLP (apps → Alloy) vive en la
+  observabilidad; el egress de apps hacia Alloy solo existe en local (el
+  siguiente punto).
 - **`k8s/apps/environments/local/networkpolicy-egress.yaml`** — aislamiento de
   **egress**, solo local: acá todo es in-cluster (Postgres y Kafka son
-  StatefulSets), así que se niega la salida y se abre DNS, datos y OTLP.
+  StatefulSets), así que se niega la salida y se abre DNS, datos, este-oeste
+  (espejo del ingress) y OTLP hacia Alloy. El detalle de cada política, con la
+  regla del espejo y el síntoma engañoso del 401, está en [`red.md`](./red.md).
 - **`k8s/observability/base/networkpolicy.yaml`** — ingress + egress del stack
   de observabilidad (idéntico en ambos entornos: Alloy → API del cluster,
   scrape cruzado, ruler → Alertmanager, Grafana → datasources).
@@ -417,12 +426,15 @@ comentario (todo lo que se permite está enumerado punto por punto):
   único origen externo permitido: el namespace del controlador del Ingress
   (`CHANGE-ME`, coherente con `ingressClassName`).
 
-Advertencias: en **local** kindnet no enforcea NetworkPolicy (validación
-estructural; el port-forward no se afecta: el kubelet inyecta ese tráfico fuera
-del datapath del CNI). En **producción** la CNI del clúster debe enforcear
-(Calico, Cilium, etc.). El egress deny de local **no** se replica en
-producción: las DB/Kafka gestionadas tienen endpoints externos no declarables de
-forma portable (FQDN lo soportan solo Cilium y similares).
+Advertencias: aunque kindnet no documenta soporte de NetworkPolicy, en **local**
+se verificó empíricamente (kind v0.33.0) que las políticas **sí cortan
+tráfico** (un egress faltante rompía el este-oeste entre pods con timeouts
+exactamente sobre la matriz declarada): tratarlas como efectivas. El
+`port-forward` no se ve afectado en ningún caso: el kubelet inyecta ese
+tráfico fuera del datapath del CNI. En **producción** la CNI del clúster sí
+debe enforcear (Calico, Cilium, etc.). El egress deny de local **no** se
+replica en producción: las DB/Kafka gestionadas tienen endpoints externos no
+declarables de forma portable (FQDN lo soportan solo Cilium y similares).
 
 ### 10.2 TLS con cert-manager
 
@@ -639,6 +651,7 @@ bash y PowerShell con exit 0. **No se validó** un `kind-up` completo ni un
 ## 16. Referencias
 
 - [`k8s/README.md`](../../k8s/README.md) — árbol de manifiestos, puntos de entrada y reglas.
+- [`docs/kubernetes/red.md`](./red.md) — red en detalle: NetworkPolicy, Services, DNS, Ingress, TLS y diferencias con Compose.
 - [`docs/kubernetes/comandos.md`](./comandos.md) — operación diaria con `kubectl`, observabilidad, checklist de salud.
 - [`scripts/README.md`](../../scripts/README.md) — los 4 pares de scripts, opciones y códigos de salida.
 - [`config/observability/`](../../config/observability) — configuración del stack de observabilidad (compartida con Compose).
