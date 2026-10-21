@@ -193,8 +193,14 @@ $SecretsExample = 'k8s/apps/environments/local/secrets.env.example'
 $Context        = 'kind-{0}' -f $ClusterName
 $TotalSteps     = 8
 
-$Apps          = @('auth-service', 'user-service', 'product-service', 'order-service', 'payment-service', 'gateway')
+$Apps          = @('auth-service', 'user-service', 'product-service', 'order-service', 'payment-service', 'gateway', 'frontend')
 $StatefulSets  = @('auth-db', 'users-db', 'products-db', 'orders-db', 'payments-db', 'kafka')
+
+# Contexto de build por servicio: los microservicios viven en services/<nombre>
+# y el frontend en frontend/ (raíz del repo).
+$BuildContext = @{}
+foreach ($s in $Apps) { $BuildContext[$s] = './services/{0}' -f $s }
+$BuildContext['frontend'] = './frontend'
 
 if (-not (Test-Path $Overlay)) {
     Stop-Script -Message "No existe ${Overlay}: correr desde la raíz del repo." -ExitCode 1
@@ -307,7 +313,7 @@ if ($SkipBuild) {
         $image = 'latiendita/{0}:{1}' -f $s, $Tag
         Write-Host ''
         Write-Info $image
-        & docker build -t $image "./services/$s"
+        & docker build -t $image $BuildContext[$s]
         if ($LASTEXITCODE -ne 0) {
             $failed.Add($s)
             Write-Warn ("build falló para '{0}' (exit code {1})" -f $s, $LASTEXITCODE)
@@ -413,5 +419,7 @@ Write-Summary 'Entorno local desplegado' -Rows @(
 ) -Next @(
     ('kubectl port-forward svc/gateway 8080:80 -n {0}' -f $Namespace),
     'curl http://localhost:8080/actuator/health/readiness',
+    ('kubectl port-forward svc/frontend 3000:80 -n {0}' -f $Namespace),
+    'abrir http://localhost:3000',
     ('kubectl get pods -n {0} -w' -f $Namespace)
 )

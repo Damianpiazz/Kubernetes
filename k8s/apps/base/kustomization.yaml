@@ -26,3 +26,7 @@ resources:
   - gateway/configmap.yaml
   - gateway/deployment.yaml
   - gateway/service.yaml
+  # Frontend (Next.js): sin configmap a propósito — su URL de API es build-arg
+  # (NEXT_PUBLIC_API_URL se inlinea en el bundle), no config runtime.
+  - frontend/deployment.yaml
+  - frontend/service.yaml

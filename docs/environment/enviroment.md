@@ -13,7 +13,7 @@ frontend).
 | `k8s/apps/environments/production/secrets.env.example` → `secrets.env` | Kubernetes producción | Ídem, con valores reales (gitignored) |
 | `k8s/observability/environments/local/secrets.env.example` → `secrets.env` | Kubernetes local | Credenciales de Grafana (namespace `latiendita-observability`) |
 | `k8s/observability/environments/production/secrets.env.example` → `secrets.env` | Kubernetes producción | Ídem, con valores reales (gitignored) |
-| `frontend/.env.local.example` → `.env.local` | Frontend (Next.js) | Build-time del frontend |
+| `frontend/.env.local.example` → `.env.local` | Frontend (Next.js) | Solo `pnpm dev` local; en Docker/k8s la URL de la API entra como build-ARG del `frontend/Dockerfile` |
 | ConfigMaps en `k8s/apps/base/*/configmap.yaml` | Kubernetes (todos) | Valores no secretos por servicio (ya definidos en el repo; no requieren acción) |
 
 Los archivos `secrets.env` reales y el `.env` son **gitignored**: nunca se
@@ -125,11 +125,21 @@ No requieren configuración manual, pero es el valor por defecto en clúster:
 
 ## 3. Frontend (Next.js)
 
-Archivo de referencia: `frontend/.env.local.example`.
+Archivo de referencia: `frontend/.env.local.example`. Next.js inlinea las
+variables `NEXT_PUBLIC_*` en el bundle del browser en tiempo de **build**, así
+que la URL de la API no es una variable runtime (un ConfigMap/env de k8s no la
+cambia): hay una vía de inyección por forma de correr el frontend.
+
+| Dónde se buildea | Valor de `NEXT_PUBLIC_API_URL` |
+|---|---|
+| `pnpm dev` local | `.env.local` (copiado de `.env.local.example`) |
+| Docker Compose / `build-images` | build-ARG del `frontend/Dockerfile`, default `http://localhost:8080` (gateway publicado en el host) |
+| Kubernetes local (kind) | el mismo default: el browser llega al gateway por `port-forward svc/gateway 8080:80` |
+| Kubernetes producción | build en el pipeline con `--build-arg NEXT_PUBLIC_API_URL=https://<dominio>` (host único de UI y API, mismo origen) |
 
 | Variable | Default | Descripción |
 |---|---|---|
-| `NEXT_PUBLIC_API_URL` | `http://localhost:8080` | URL base del gateway. Local: `http://localhost:8080`; Vercel: `https://api.<dominio>` (configurar en el dashboard, Production y Preview) |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8080` | URL base del gateway vista desde el browser. Producción: `https://<dominio>` (el mismo host que sirve la UI y `/api`) |
 
 ---
 

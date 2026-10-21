@@ -3,8 +3,10 @@
     Construye las imágenes Docker de los servicios de La Tiendita.
 
 .DESCRIPTION
-    Construye "latiendita/<servicio>:<tag>" para cada servicio de services/.
-    Muestra el avance por servicio (tiempo y tamaño) y cierra con un resumen.
+    Construye "latiendita/<servicio>:<tag>" para cada servicio: los
+    microservicios viven en services/ y el frontend en frontend/ (contexto de
+    build distinto por nombre). Muestra el avance por servicio (tiempo y
+    tamaño) y cierra con un resumen.
     Si algún build falla, continúa con el resto y termina con error al final.
 
     Par nativo de scripts/build-images.sh: mismos objetivos, mismos pasos y
@@ -33,7 +35,7 @@
     del repo. Correr desde la raíz del repo.
 
     Códigos de salida (idénticos a build-images.sh):
-      1 uso incorrecta / servicio desconocido / repo sin services/
+      1 uso incorrecta / servicio desconocido / repo sin services/ ni frontend/
       2 docker ausente o daemon de Docker caído
       3 falló el build de al menos un servicio
 #>
@@ -187,16 +189,23 @@ $AllServices = @(
     'product-service',
     'order-service',
     'payment-service',
-    'gateway'
+    'gateway',
+    'frontend'
 )
 
-if (-not (Test-Path 'services')) {
-    Stop-Script -Message 'No se encontró el directorio services/: correr desde la raíz del repo.' -ExitCode 1
+# Contexto de build por servicio: los microservicios viven en services/<nombre>
+# y el frontend en frontend/ (raíz del repo).
+$BuildContext = @{}
+foreach ($s in $AllServices) { $BuildContext[$s] = './services/{0}' -f $s }
+$BuildContext['frontend'] = './frontend'
+
+if (-not (Test-Path 'services') -or -not (Test-Path 'frontend')) {
+    Stop-Script -Message 'No se encontró el directorio services/ ni frontend/: correr desde la raíz del repo.' -ExitCode 1
 }
 
 Write-Header 'La Tiendita · build de imágenes' @(
     "tag        : $Tag",
-    "servicios  : services/"
+    "servicios  : services/ + frontend/"
 )
 
 # --- 1. Preflight ------------------------------------------------------------
@@ -238,7 +247,7 @@ foreach ($s in $selected) {
     $dockerArgs = @('build', '-t', $image)
     if ($NoCache) { $dockerArgs += '--no-cache' }
     if ($Pull)    { $dockerArgs += '--pull' }
-    $dockerArgs += ('./services/{0}' -f $s)
+    $dockerArgs += $BuildContext[$s]
 
     Write-Host ''
     Write-Info $image

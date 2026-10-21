@@ -222,12 +222,12 @@ Levanta el entorno local completo en 8 pasos:
 1. **Preflight** — `docker`, `kubectl`, `kind` presentes y daemon activo.
 2. **Clúster kind** — crea o reutiliza el clúster y activa el contexto.
 3. **Secrets locales** — crea `secrets.env` desde su `.example` si no existe (nunca lo pisa).
-4. **Imágenes** — build de los 6 servicios (embebido, no invoca a `build-images`) + `kind load`.
+4. **Imágenes** — build de los 7 servicios (embebido, no invoca a `build-images`) + `kind load`.
 5. **Manifests** — `kubectl apply` del environment local.
 6. **Infraestructura** — espera los StatefulSets (`auth-db`, `users-db`, `products-db`,
    `orders-db`, `payments-db`, `kafka`).
 7. **Servicios** — espera los Deployments (`auth-service`, `user-service`,
-   `product-service`, `order-service`, `payment-service`, `gateway`).
+   `product-service`, `order-service`, `payment-service`, `gateway`, `frontend`).
 8. **Verificación** — todos los pods del namespace `latiendita` en `Running`/`Completed`.
 
 | bash | PowerShell | Default |
@@ -281,18 +281,19 @@ bash scripts/kind-down.sh --yes        # limpiar todo sin preguntar
 ```
 
 > `--cache` / `-Cache` es opt-in a propósito: limpiar la build cache te obliga a
-> un cold rebuild de los 6 servicios la próxima vez que corras `kind-up`.
+> un cold rebuild de los 7 servicios la próxima vez que corras `kind-up`.
 
 ---
 
 ## build-images
 
-Construye `latiendita/<servicio>:<tag>` para cada servicio de `services/`, muestra el
+Construye `latiendita/<servicio>:<tag>` para cada servicio — los microservicios
+viven en `services/` y el frontend en `frontend/` —, muestra el
 avance por servicio (tiempo y tamaño) y cierra con una tabla de resultados. Si algún
 build falla, sigue con el resto y termina con error al final.
 
 Servicios: `auth-service`, `user-service`, `product-service`, `order-service`,
-`payment-service`, `gateway`.
+`payment-service`, `gateway`, `frontend`.
 
 > `eureka-server` **no** está en este listado: en Kubernetes no se despliega (los
 > servicios corren con `EUREKA_ENABLED=false` y el tráfico entra por el Gateway);
@@ -301,7 +302,7 @@ Servicios: `auth-service`, `user-service`, `product-service`, `order-service`,
 | bash | PowerShell | Default |
 |---|---|---|
 | `-t`, `--tag <tag>` | `-Tag` | `dev` |
-| `-s`, `--service <nombre>` (repetible) | `-Services` (array) | los 6 servicios |
+| `-s`, `--service <nombre>` (repetible) | `-Services` (array) | los 7 servicios |
 | `--no-cache` | `-NoCache` | caché activada |
 | `--pull` | `-Pull` | sin `--pull` |
 | `-h`, `--help` | — | — |

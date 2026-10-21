@@ -45,6 +45,15 @@ x-kafka-limits: &kafka-limits
       cpus: "1.0"
       memory: 1G
 
+x-frontend-limits: &frontend-limits
+  resources:
+    reservations:
+      cpus: "0.10"
+      memory: 128M
+    limits:
+      cpus: "0.50"
+      memory: 384M
+
 services:
   eureka-server:
     build: ./services/eureka-server
@@ -359,6 +368,30 @@ services:
       timeout: 3s
       retries: 5
       start_period: 180s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # URL del gateway vista DESDE el browser (Next la inlinea en build).
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+    deploy: *frontend-limits
+    ports:
+      - "3000:3000"
+    depends_on:
+      gateway:
+        condition: service_healthy
+    networks:
+      # Red edge: el browser del host habla con el gateway publicado en 8080;
+      # el contenedor del frontend no necesita salir a la red backend.
+      - frontend
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
 
 networks:

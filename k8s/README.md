@@ -5,7 +5,7 @@ Estructura de los manifiestos. **Convención: `<stack>/base` + `<stack>/environm
 
 ```
 k8s/
-├── apps/                              Stack: los 6 microservicios   (ns latiendita)
+├── apps/                              Stack: 6 microservicios + frontend (ns latiendita)
 │   ├── base/                          Manifiestos neutrales, sin entorno ni credenciales
 │   └── environments/
 │       ├── local/                     kind/k3d: base + data + secretos locales + egress aislado

@@ -37,6 +37,9 @@ images:
   - name: latiendita/gateway
     newName: CHANGE-ME/latiendita/gateway
     newTag: CHANGE-ME
+  - name: latiendita/frontend
+    newName: CHANGE-ME/latiendita/frontend
+    newTag: CHANGE-ME
 
 replicas:
   - name: auth-service
@@ -50,6 +53,8 @@ replicas:
   - name: payment-service
     count: 2
   - name: gateway
+    count: 2
+  - name: frontend
     count: 2
 
 # En producción siempre se consulta el registry. Los tags de `images:` son
@@ -98,9 +103,10 @@ configMapGenerator:
   - name: gateway-config
     behavior: merge
     literals:
-      # Dominio EXACTO del frontend en Vercel. Sin patrones: en producción no
-      # se aceptan previews ni ningún otro origen.
-      - CORS_ALLOWED_ORIGINS=https://CHANGE-ME.vercel.app
+      # Dominio EXACTO del frontend: la UI y /api comparten host (mismo origen,
+      # el CORS queda como respaldo). Sin patrones: en producción no se aceptan
+      # previews ni ningún otro origen.
+      - CORS_ALLOWED_ORIGINS=https://CHANGE-ME.example.com
 
 # Secretos de la aplicación: mismo patrón que local (§8 de la doc).
 # secrets.env es gitignored y NO se commitea: copiar secrets.env.example y

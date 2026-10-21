@@ -196,7 +196,13 @@ SECRETS_EXAMPLE="k8s/apps/environments/local/secrets.env.example"
 CONTEXT="kind-${CLUSTER_NAME}"
 TOTAL_STEPS=8
 
-APPS=(auth-service user-service product-service order-service payment-service gateway)
+APPS=(auth-service user-service product-service order-service payment-service gateway frontend)
+
+# Contexto de build por servicio: los microservicios viven en services/<nombre>
+# y el frontend en frontend/ (raíz del repo).
+build_context() {
+  if [[ "$1" == "frontend" ]]; then printf '%s' './frontend'; else printf '%s' "./services/$1"; fi
+}
 STATEFULSETS=(auth-db users-db products-db orders-db payments-db kafka)
 
 [[ -d "$OVERLAY" ]] || fail "no existe $OVERLAY: correr desde la raíz del repo." 1
@@ -309,7 +315,7 @@ else
     printf '\n'
     info "$IMAGE"
     rc=0
-    docker build -t "$IMAGE" "./services/$s" || rc=$?
+    docker build -t "$IMAGE" "$(build_context "$s")" || rc=$?
     if (( rc != 0 )); then
       FAILED_BUILD+=("$s")
       warn "build falló para '$s' (exit code $rc)"
@@ -418,6 +424,8 @@ done_step "$TOTAL_PODS/$TOTAL_PODS pods listos"
 NEXT_STEPS=(
   "kubectl port-forward svc/gateway 8080:80 -n $NAMESPACE"
   "curl http://localhost:8080/actuator/health/readiness"
+  "kubectl port-forward svc/frontend 3000:80 -n $NAMESPACE"
+  "abrir http://localhost:3000"
   "kubectl get pods -n $NAMESPACE -w"
 )
 summary "Entorno local desplegado" \

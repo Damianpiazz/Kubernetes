@@ -7,20 +7,27 @@ set -euo pipefail
 # mismos pasos y mismo contrato de códigos de salida.
 #
 # Contrato de códigos de salida (idéntico al de build-images.ps1):
-#   1  uso incorrecta / opción o servicio desconocido / repo sin services/
+#   1  uso incorrecta / opción o servicio desconocido / repo sin services/ ni frontend/
 #   2  docker ausente o daemon de Docker caído
 #   3  falló el build de al menos un servicio
 #
 # Autocontenido: no sourcea librerías ni invoca a otros scripts del repo.
 # Correr desde la raíz del repo.
 
-ALL_SERVICES=(auth-service user-service product-service order-service payment-service gateway)
+ALL_SERVICES=(auth-service user-service product-service order-service payment-service gateway frontend)
+
+# Contexto de build por servicio: los microservicios viven en services/<nombre>
+# y el frontend en frontend/ (raíz del repo).
+build_context() {
+  if [[ "$1" == "frontend" ]]; then printf '%s' './frontend'; else printf '%s' "./services/$1"; fi
+}
 
 usage() {
   cat <<'EOF'
 Uso: scripts/build-images.sh [opciones]
 
-Construye "latiendita/<servicio>:<tag>" para cada servicio de services/.
+Construye "latiendita/<servicio>:<tag>" para cada servicio: los microservicios
+viven en services/ y el frontend en frontend/.
 Muestra el avance por servicio (tiempo y tamaño) y cierra con un resumen.
 Si algún build falla, continúa con el resto y termina con error al final.
 
@@ -32,7 +39,7 @@ Opciones:
   -h, --help               Esta ayuda
 
 Servicios válidos: auth-service, user-service, product-service,
-                   order-service, payment-service, gateway
+                   order-service, payment-service, gateway, frontend
 
 Códigos de salida: 1 uso · 2 docker no disponible · 3 build fallido
 EOF
@@ -183,12 +190,12 @@ while [[ $# -gt 0 ]]; do
 done
 if (( $# > 0 )); then usage >&2; fail "argumento inesperado: $1"; fi
 
-[[ -d services ]] || fail "no se encontró el directorio services/: correr desde la raíz del repo." 1
+[[ -d services && -d frontend ]] || fail "no se encontró el directorio services/ ni frontend/: correr desde la raíz del repo." 1
 
 TOTAL_STEPS=3
 header "La Tiendita · build de imágenes" \
   "tag        : $TAG" \
-  "servicios  : services/"
+  "servicios  : services/ + frontend/"
 
 # --- 1. Preflight ------------------------------------------------------------
 step "Preflight"
@@ -247,7 +254,7 @@ for s in "${SELECTED[@]}"; do
   BUILD_ARGS=(build -t "$IMAGE")
   if (( NO_CACHE == 1 )); then BUILD_ARGS+=(--no-cache); fi
   if (( PULL == 1 )); then BUILD_ARGS+=(--pull); fi
-  BUILD_ARGS+=("./services/$s")
+  BUILD_ARGS+=("$(build_context "$s")")
 
   printf '\n'
   info "$IMAGE"

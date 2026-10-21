@@ -29,7 +29,7 @@ bloqueado).
                     LOCAL                              PRODUCCIÓN
              ┌─────────────────────┐          ┌──────────────────────────┐
   navegador──┤ port-forward        │          │ DNS → Ingress            │
-   :3000 ───►│ svc/gateway 8080:80 │          │host api.CHANGE-ME → gw   │
+   :3000 ───►│ svc/fe+gw 3000/8080 │          │host CHANGE-ME → / y /api │
              └──────────┬──────────┘          └────────────┬─────────────┘
                         ▼                                  ▼
              ┌──────────────────────────────────────────────────────────┐
@@ -374,11 +374,12 @@ hay Ingress ni LB.
 
 | Ingress | Host | Path | Backend | TLS Secret |
 |---|---|---|---|---|
-| `la-tiendita` (apps) | `api.CHANGE-ME.example.com` | `/api` (Prefix) | `gateway:80` | `la-tiendita-tls` |
+| `la-tiendita` (apps) | `CHANGE-ME.example.com` | `/api` (Prefix) y `/` (Prefix) | `gateway:80` y `frontend:80` | `la-tiendita-tls` |
 | `grafana` (observability) | `grafana.CHANGE-ME.example.com` | `/` (Prefix) | `grafana:3000` | `grafana-tls` |
 
-- El host de apps expone **solo la API** (`/api`): la SPA vive en Vercel
-  (fuera del clúster) y solo llama por HTTPS (mixed content sin TLS).
+- El host de apps expone **UI y API**: `/` → frontend y `/api` → gateway en un
+  mismo host (mismo origen, sin CORS en la práctica; `/api` es más específico
+  que `/`, así que el tráfico de la API no llega al frontend).
 - Grafana tiene **host propio** deliberadamente: evita el modo subpath de
   Grafana (`GF_SERVER_ROOT_URL` + `SERVE_FROM_SUB_PATH`), propenso a romper
   assets.
@@ -404,7 +405,8 @@ Dos mecanismos distintos que suenan a "seguridad de red" y no lo son:
 | ¿Aplica a curl / server-to-server? | no | sí |
 
 Un `curl` ignora CORS; una NetworkPolicy no sabe qué es un "origen de
-navegador". La política de orígenes del frontend (Vercel en producción, `*` en
+navegador". La política de orígenes del frontend (mismo host que la API en
+producción, `*` en
 local) se resuelve **en la aplicación**, no en la red.
 
 ---

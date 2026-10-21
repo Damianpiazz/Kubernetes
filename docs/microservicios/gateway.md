@@ -74,7 +74,7 @@ Formato **ProblemDetail (RFC 7807)**, emitido por `GatewayErrorController` (mism
 | Rutas públicas | `/api/auth/**`, `/api/webhooks/**`, `GET /api/products/**` y `GET /api/categories/**` (catálogo de la SPA), `/actuator/health/**`, `/actuator/prometheus`, `/actuator/info` (`SecurityConfig`); **todo lo demás** —incluido el resto de `/actuator/**` y las escrituras del catálogo— exige `Authorization: Bearer <jwt>` |
 | Propagación de identidad | `IdentityPropagationFilter` inyecta `X-User-Id` con el `sub` y **elimina siempre** el header enviado por el cliente |
 | Rate limiting | `RateLimitFilter` (Resilience4j, in-memory): clave = `user:<sub>` si hay token, si no `ip:<ip>` |
-| CORS | `CorsConfigurationSource` dentro de la cadena de seguridad, con `allowedOriginPatterns` (permite `*` junto a `allow-credentials=true`): el preflight `OPTIONS` se contesta sin JWT; política por entorno — `*` en local, dominio exacto de Vercel en producción |
+| CORS | `CorsConfigurationSource` dentro de la cadena de seguridad, con `allowedOriginPatterns` (permite `*` junto a `allow-credentials=true`): el preflight `OPTIONS` se contesta sin JWT; política por entorno — `*` en local, dominio exacto de la UI en producción (host único con `/api`, mismo origen en la práctica) |
 | Estado | Sin sesiones (`STATELESS`), CSRF deshabilitado (API sin cookies) |
 
 > El rate limiting es **por instancia** (memoria): con N réplicas del Gateway el límite efectivo se multiplica por N. Deuda futura: contadores en Redis para un límite global.

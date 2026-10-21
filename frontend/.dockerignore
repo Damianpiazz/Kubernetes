@@ -1,0 +1,15 @@
+# Mismos criterios que frontend/.gitignore: nada de dependencias ni artefactos
+# de build locales en el contexto (pesan GBs y contaminan la capa COPY . .).
+node_modules
+.next
+*.tsbuildinfo
+
+# Secrets: la URL de la API entra por build-ARG, nunca por archivo.
+.env
+.env*.local
+
+# VCS y ruido de IDE/sandbox
+.git
+.gitignore
+.vercel
+.v0*
