@@ -18,6 +18,19 @@ resources:
   # Egress aislado (solo local: acá todo es in-cluster; ver el archivo).
   - networkpolicy-egress.yaml
 
+# Seed de desarrollo: mismos JSON que trae la imagen (classpath), solo se
+# enciende. Insert-only y idempotente, así que un rollout restart no duplica
+# datos. No existe en producción: el runner ni se instancia sin la variable.
+configMapGenerator:
+  - name: auth-service-config
+    behavior: merge
+    literals:
+      - APP_SEED_ENABLED=true
+  - name: product-service-config
+    behavior: merge
+    literals:
+      - APP_SEED_ENABLED=true
+
 secretGenerator:
   - name: latiendita-secrets
     envs:

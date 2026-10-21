@@ -226,7 +226,7 @@ Topic publicado: **`account-events`** (Kafka), clave = `id` de la cuenta. Public
 
 ## 8. Seeders de desarrollo
 
-Carga inicial de cuentas desde JSON, pensada **solo para desarrollo local** (`compose.yaml` define `APP_SEED_ENABLED=true`; en producción la variable no existe y el runner ni se instancia gracias a `@ConditionalOnProperty`).
+Carga inicial de cuentas desde JSON, pensada **solo para desarrollo local** (`compose.yaml` y el overlay de k8s local `k8s/apps/environments/local` definen `APP_SEED_ENABLED=true`; en producción la variable no existe y el runner ni se instancia gracias a `@ConditionalOnProperty`).
 
 | Archivo | Contenido |
 |---|---|
