@@ -42,6 +42,7 @@ public class MercadoPagoAdapter implements PaymentGateway {
                     .map(item -> PreferenceItemRequest.builder()
                             .id(item.id())
                             .title(item.title())
+                            .description(item.description())
                             .quantity(item.quantity())
                             .unitPrice(item.unitPrice())
                             .build())
@@ -59,6 +60,9 @@ public class MercadoPagoAdapter implements PaymentGateway {
                             .build())
                     .autoReturn("approved")
                     .externalReference(request.externalReference())
+                    // Aparece en el resumen de la tarjeta del titular: baja las
+                    // desconocimientos/chargebacks. Sólo se envía si está configurado.
+                    .statementDescriptor(nullToNull(request.statementDescriptor()))
                     .notificationUrl(request.notificationUrl())
                     .build();
 
@@ -128,5 +132,10 @@ public class MercadoPagoAdapter implements PaymentGateway {
                     "MERCADO_PAGO_ACCESS_TOKEN no está configurado");
         }
         MercadoPagoConfig.setAccessToken(properties.accessToken());
+    }
+
+    /** Un campo vacío debe ir como {@code null}: Mercado Pago valida el string vacío. */
+    private static String nullToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

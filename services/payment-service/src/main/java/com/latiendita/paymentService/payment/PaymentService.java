@@ -63,6 +63,9 @@ public class PaymentService {
     @Value("${mercado-pago.back-url-pending}")
     private String backUrlPending;
 
+    @Value("${mercado-pago.statement-descriptor:}")
+    private String statementDescriptor;
+
     public PaymentResponse create(CreatePaymentRequest request) {
         Long customerId = CurrentUser.id();
         OrderDto order = findOwnedOrder(request.orderId(), customerId);
@@ -93,7 +96,8 @@ public class PaymentService {
                         notificationUrl,
                         backUrlSuccess,
                         backUrlFailure,
-                        backUrlPending));
+                        backUrlPending,
+                        statementDescriptor));
 
         payment.setPreferenceId(preference.preferenceId());
         payment.setCheckoutUrl(preference.checkoutUrl());
@@ -127,6 +131,24 @@ public class PaymentService {
         PaymentEntity payment = paymentRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new PaymentNotFoundException(
                         "No existe un pago registrado para el pedido " + orderId));
+        if (!payment.getCustomerId().equals(CurrentUser.id())) {
+            throw new PaymentAccessDeniedException(payment.getId());
+        }
+        return PaymentMapper.toResponse(payment);
+    }
+
+    /**
+     * Resuelve el pago por su {@code external_reference} (= orderNumber), que es
+     * el único identificador propio que Mercado Pago devuelve en las back_urls.
+     * Sin esto, la página de retorno del checkout no tendría cómo saber de qué
+     * orden se trata (el {@code payment_id} del query es el de Mercado Pago, no
+     * el nuestro).
+     */
+    @Transactional(readOnly = true)
+    public PaymentResponse findByExternalReference(String externalReference) {
+        PaymentEntity payment = paymentRepository.findByExternalReference(externalReference)
+                .orElseThrow(() -> new PaymentNotFoundException(
+                        "No existe un pago registrado para la referencia " + externalReference));
         if (!payment.getCustomerId().equals(CurrentUser.id())) {
             throw new PaymentAccessDeniedException(payment.getId());
         }
@@ -250,10 +272,16 @@ public class PaymentService {
         return payment;
     }
 
+    /**
+     * Mapea los ítems del pedido a lo que espera el proveedor. `id` va con el
+     * `productId` para poder conciliar contra nuestro catálogo; `description` es
+     * el título, porque order-service no expone descripciones largas.
+     */
     private List<PaymentGateway.GatewayPreferenceItem> itemsFromOrder(OrderDto order) {
         return order.items().stream()
                 .map(item -> new PaymentGateway.GatewayPreferenceItem(
                         String.valueOf(item.productId()),
+                        item.productTitle(),
                         item.productTitle(),
                         item.quantity(),
                         item.unitPrice()))

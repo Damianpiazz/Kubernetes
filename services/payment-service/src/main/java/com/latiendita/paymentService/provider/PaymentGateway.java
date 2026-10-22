@@ -12,8 +12,8 @@ public interface PaymentGateway {
 
     GatewayPayment getPayment(String providerPaymentId);
 
-    record GatewayPreferenceItem(String id, String title, Integer quantity,
-                                 BigDecimal unitPrice) {}
+    record GatewayPreferenceItem(String id, String title, String description,
+                                 Integer quantity, BigDecimal unitPrice) {}
 
     record GatewayPreferenceRequest(
             String externalReference,
@@ -24,7 +24,8 @@ public interface PaymentGateway {
             String notificationUrl,
             String backUrlSuccess,
             String backUrlFailure,
-            String backUrlPending) {}
+            String backUrlPending,
+            String statementDescriptor) {}
 
     record GatewayPreference(String preferenceId, String checkoutUrl) {}
 

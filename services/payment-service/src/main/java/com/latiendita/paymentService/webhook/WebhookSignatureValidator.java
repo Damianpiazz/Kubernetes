@@ -3,7 +3,9 @@ package com.latiendita.paymentService.webhook;
 import com.latiendita.paymentService.provider.mercadopago.MercadoPagoProperties;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -39,9 +41,7 @@ public class WebhookSignatureValidator {
             return false;
         }
 
-        String template = "id:" + nullToEmpty(resourceId)
-                + ";request-id:" + nullToEmpty(requestId)
-                + ";ts:" + ts + ";";
+        String template = manifest(ts, requestId, resourceId);
 
         String computed = hmacSha256Hex(secret, template);
 
@@ -53,6 +53,26 @@ public class WebhookSignatureValidator {
             log.warn("Firma inválida. template={} calculado={}", template, computed);
         }
         return valid;
+    }
+
+    /**
+     * Manifesto que firma Mercado Pago, en su orden exacto:
+     * {@code id:[data.id];request-id:[x-request-id];ts:[ts];}
+     *
+     * <p>Cuando un valor no viene, la documentación de Mercado Pago exige remover
+     * <b>el segmento entero</b> antes de calcular el HMAC (no dejarlo vacío), o el
+     * hash no coincide con el que calculó Mercado Pago.</p>
+     */
+    private static String manifest(String ts, String requestId, String resourceId) {
+        List<String> segments = new ArrayList<>(3);
+        if (resourceId != null && !resourceId.isBlank()) {
+            segments.add("id:" + resourceId);
+        }
+        if (requestId != null && !requestId.isBlank()) {
+            segments.add("request-id:" + requestId);
+        }
+        segments.add("ts:" + ts);
+        return String.join(";", segments) + ";";
     }
 
     private static Map<String, String> parse(String header) {
@@ -79,9 +99,5 @@ public class WebhookSignatureValidator {
         } catch (Exception ex) {
             throw new IllegalStateException("No se pudo calcular la firma HMAC", ex);
         }
-    }
-
-    private static String nullToEmpty(String value) {
-        return value == null ? "" : value;
     }
 }

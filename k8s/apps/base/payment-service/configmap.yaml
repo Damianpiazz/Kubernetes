@@ -11,6 +11,18 @@ data:
   KAFKA_BOOTSTRAP_SERVERS: kafka:9092
   ORDER_SERVICE_BASE_URL: http://order-service
   EUREKA_ENABLED: "false"
+  PAYMENT_PROVIDER: MERCADO_PAGO
+  # URLs de Mercado Pago: SOLO un fallback documental. Nunca se aplica base
+  # directamente (regla del repo); los valores reales se pisan en cada overlay
+  # vía configMapGenerator (k8s/apps/environments/*/kustomization.yaml).
+  # Mercado Pago rechaza localhost/127.0.0.1 tanto acá como en las back_urls.
+  MERCADO_PAGO_NOTIFICATION_URL: CHANGE-ME-tunel/api/webhooks/mercado-pago
+  MERCADO_PAGO_BACK_URL_SUCCESS: https://CHANGE-ME.example.com/checkout/success
+  MERCADO_PAGO_BACK_URL_FAILURE: https://CHANGE-ME.example.com/checkout/failure
+  MERCADO_PAGO_BACK_URL_PENDING: https://CHANGE-ME.example.com/checkout/pending
+  # Texto del resumen de la tarjeta del titular (no es secreto ni un endpoint:
+  # es branding, por eso vive en base y no en los overlays).
+  MERCADO_PAGO_STATEMENT_DESCRIPTOR: La Tiendita
   # Tracing: Alloy recibe el OTLP y lo reenvía a Tempo. Nombre FQDN porque
   # Alloy vive en el namespace latiendita-observability (cruza namespaces).
   OTLP_TRACING_ENDPOINT: http://alloy.latiendita-observability.svc.cluster.local:4318/v1/traces

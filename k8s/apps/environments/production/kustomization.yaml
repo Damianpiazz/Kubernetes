@@ -7,7 +7,8 @@ kind: Kustomization
 #   kubectl apply -k k8s/observability/environments/production   (aparte: otro namespace)
 #
 # NO incluye k8s/data/base: en producción las bases de datos y Kafka son
-# servicios gestionados y sus endpoints se inyectan abajo (configMapGenerator).
+# servicios gestionados y el storage de imágenes es Azure Blob Storage; los
+# endpoints se inyectan abajo (configMapGenerator).
 namespace: latiendita
 
 resources:
@@ -68,6 +69,20 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/imagePullPolicy
         value: Always
+  # El validador de secretos de Mercado Pago (MercadoPagoSecretsValidator) está
+  # anotado @Profile({"k8s","prod"}) y revienta el arranque si faltan el access
+  # token o el webhook secret. Solo se activa acá: en local la integración es
+  # opcional (.env / secrets.env pueden venir vacíos) y un CrashLoop por eso
+  # dejaría todo el stack caído. Es el único Deployment que setea el profile.
+  - target:
+      kind: Deployment
+      name: payment-service
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: SPRING_PROFILES_ACTIVE
+          value: k8s
 
 # Endpoints de bases de datos y Kafka EXTERNOS (gestionados). Reemplazar CHANGE-ME.
 configMapGenerator:
@@ -88,6 +103,11 @@ configMapGenerator:
     literals:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://CHANGE-ME.db.example.com:5432/products
       - SPRING_DATASOURCE_USERNAME=CHANGE-ME
+      # Azure Blob Storage (servicio gestionado): sobrescribe el Azurite local
+      # de k8s/apps/base/product-service/configmap.yaml. Endpoint y cuenta
+      # reales de la cuenta de Azure.
+      - AZURE_STORAGE_ENDPOINT=https://CHANGE-ME.blob.core.windows.net
+      - AZURE_STORAGE_ACCOUNT=CHANGE-ME
   - name: order-service-config
     behavior: merge
     literals:
@@ -100,6 +120,14 @@ configMapGenerator:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://CHANGE-ME.db.example.com:5432/payments
       - SPRING_DATASOURCE_USERNAME=CHANGE-ME
       - KAFKA_BOOTSTRAP_SERVERS=CHANGE-ME.kafka.example.com:9092
+      # Mercado Pago: dominio del ingress del mismo host que el frontend
+      # (ver ingress.yaml y CORS_ALLOWED_ORIGINS acá abajo). El webhook necesita
+      # que esa ruta esté expuesta a internet; el secret de firma va en
+      # secrets.env (MERCADO_PAGO_WEBHOOK_SECRET).
+      - MERCADO_PAGO_NOTIFICATION_URL=https://CHANGE-ME.example.com/api/webhooks/mercado-pago
+      - MERCADO_PAGO_BACK_URL_SUCCESS=https://CHANGE-ME.example.com/checkout/success
+      - MERCADO_PAGO_BACK_URL_FAILURE=https://CHANGE-ME.example.com/checkout/failure
+      - MERCADO_PAGO_BACK_URL_PENDING=https://CHANGE-ME.example.com/checkout/pending
   - name: gateway-config
     behavior: merge
     literals:

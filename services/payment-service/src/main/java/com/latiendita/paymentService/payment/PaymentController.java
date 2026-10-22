@@ -48,4 +48,16 @@ public class PaymentController {
     public PaymentResponse findByOrderId(@PathVariable Long orderId) {
         return paymentService.findByOrderId(orderId);
     }
+
+    /**
+     * GET /api/payments/reference/{externalReference}
+     *
+     * Lo usan las páginas de retorno del checkout: Mercado Pago redirige con
+     * ?external_reference=<orderNumber> y este endpoint lo traduce al pago.
+     */
+    @GetMapping("/reference/{externalReference}")
+    public PaymentResponse findByExternalReference(
+            @PathVariable String externalReference) {
+        return paymentService.findByExternalReference(externalReference);
+    }
 }

@@ -49,11 +49,54 @@ Archivo de referencia: `.env.example`. Docker Compose lo lee desde la raíz.
 |---|---|---|
 | `MERCADO_PAGO_ACCESS_TOKEN` | vacío | Token de Mercado Pago; vacío ⇒ integración deshabilitada |
 | `MERCADO_PAGO_WEBHOOK_SECRET` | vacío | Secreto de verificación de webhooks de Mercado Pago |
+| `MERCADO_PAGO_NOTIFICATION_URL` | `http://localhost:8080/api/webhooks/mercado-pago` | URL a la que Mercado Pago notifica los cambios de pago |
+| `MERCADO_PAGO_BACK_URL_SUCCESS` | `http://localhost:3000/checkout/success` | Redirección tras pagar |
+| `MERCADO_PAGO_BACK_URL_FAILURE` | `http://localhost:3000/checkout/failure` | Redirección tras un pago rechazado |
+| `MERCADO_PAGO_BACK_URL_PENDING` | `http://localhost:3000/checkout/pending` | Redirección tras un pago en proceso (p. ej. débito o transferencia) |
+| `MERCADO_PAGO_STATEMENT_DESCRIPTOR` | `La Tiendita` | Texto del resumen de la tarjeta del titular (reduce desconocimientos/chargebacks) |
 | `CORS_ALLOWED_ORIGINS` | `*` | Orígenes permitidos por el gateway (CORS) |
 | `GRAFANA_ADMIN_USER` | `admin` | Usuario admin de Grafana (`compose.observability.yaml`) |
 | `GRAFANA_ADMIN_PASSWORD` | `admin` | Password admin de Grafana (cambiar fuera de desarrollo) |
 | `TRACING_SAMPLING_PROBABILITY` | `0.1` | Probabilidad de muestreo de traces (0.0–1.0) |
 | `PGADMIN_PASSWORD` | `changeme` | Password de pgAdmin (profile `tools`, `compose.override.yaml`) |
+
+### Pago con Mercado Pago en local (túnel)
+
+Las cuatro URLs anteriores tienen defaults `localhost` **sólo para que el stack
+arranque sin configurar nada**: el proveedor rechaza `localhost`/`127.0.0.1`
+tanto en `notification_url` como en las `back_urls`. Para probar el flujo de
+verdad hace falta un túnel público que repunte a los puertos del host:
+
+```bash
+docker compose up -d
+ngrok http 8080   # gateway  → https://<tunel-gw>/api/webhooks/mercado-pago
+ngrok http 3000   # frontend → https://<tunel-fe>/checkout/success|failure|pending
+```
+
+Luego en `.env`:
+
+```dotenv
+MERCADO_PAGO_NOTIFICATION_URL=https://<tunel-gw>/api/webhooks/mercado-pago
+MERCADO_PAGO_BACK_URL_SUCCESS=https://<tunel-fe>/checkout/success
+MERCADO_PAGO_BACK_URL_FAILURE=https://<tunel-fe>/checkout/failure
+MERCADO_PAGO_BACK_URL_PENDING=https://<tunel-fe>/checkout/pending
+```
+
+y `docker compose up -d payment-service` para recrear el contenedor con los
+nuevos valores. Un único túnel sólo llega a un puerto: con un dominio propio y
+un reverse proxy (o con `--host-header=rewrite` de ngrok) se resuelve en uno
+solo.
+
+**Webhook secret**: se genera en *Tus integraciones → Webhooks → Configurar
+notificaciones → Guardar* de Mercado Pago y va en `MERCADO_PAGO_WEBHOOK_SECRET`.
+Sin él, `WebhookSignatureValidator` descarta toda notificación y el pago queda
+`PENDING` para siempre. Con credenciales de **prueba**, los pagos reales no
+envían notificaciones: el webhook se ensaya desde *Tus integraciones* (usa
+`notifications_history` para diagnosticar entregas fallidas).
+
+> El checkout de Mercado Pago se abre en la misma pestaña y vuelve a las
+> `back_urls` con `?external_reference=<orderNumber>`. Esa referencia se traduce
+> al pago con `GET /api/payments/reference/{externalReference}`.
 
 ---
 
@@ -76,6 +119,7 @@ Kustomize). En producción todos los valores `CHANGE-ME` deben reemplazarse
 | `PAYMENTS_DB_PASSWORD` | `SPRING_DATASOURCE_PASSWORD` en `payment-service` | Password de la DB externa `payments` |
 | `MERCADO_PAGO_ACCESS_TOKEN` | `MERCADO_PAGO_ACCESS_TOKEN` en `payment-service` | Vacío ⇒ feature deshabilitada |
 | `MERCADO_PAGO_WEBHOOK_SECRET` | `MERCADO_PAGO_WEBHOOK_SECRET` en `payment-service` | Vacío ⇒ feature deshabilitada |
+| `AZURE_STORAGE_KEY` | `AZURE_STORAGE_KEY` en `product-service` | Clave de cuenta del storage de imágenes (Azurite local / Azure Blob Storage en prod) |
 
 ### 2.2 Secretos de observabilidad (`k8s/observability/environments/<env>/secrets.env`)
 
@@ -104,6 +148,9 @@ No requieren configuración manual, pero es el valor por defecto en clúster:
 | `USER_SERVICE_BASE_URL` | `http://user-service` | gateway |
 | `PAYMENT_SERVICE_BASE_URL` | `http://payment-service` | gateway |
 | `CORS_ALLOWED_ORIGINS` | `*` local / dominio exacto en producción | gateway |
+| `AZURE_STORAGE_ENDPOINT` | `http://azurite:10000/devstoreaccount1` local / `https://<cuenta>.blob.core.windows.net` prod | product-service |
+| `AZURE_STORAGE_ACCOUNT` | `devstoreaccount1` local / cuenta real en prod | product-service |
+| `AZURE_STORAGE_CONTAINER` | `productos` | product-service |
 
 ### 2.4 Variables de los StatefulSets (fijas en los manifiestos)
 
@@ -117,6 +164,9 @@ No requieren configuración manual, pero es el valor por defecto en clúster:
   `KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR`,
   `KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR`,
   `KAFKA_TRANSACTION_STATE_LOG_MIN_ISR`, `KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS`.
+- **Azurite** (`k8s/data/base/azurite/statefulset.yaml`): sin env — todo por
+  args fijos (`--blobHost/--queueHost/--tableHost 0.0.0.0`,
+  `--location /data`); PVC `1Gi` por `volumeClaimTemplates`.
 - **Grafana** (`k8s/observability/base/grafana/deployment.yaml`):
   `GF_USERS_ALLOW_SIGN_UP=false`, `GF_ANALYTICS_REPORTING_ENABLED=false`,
   `GF_ANALYTICS_CHECK_FOR_UPDATES=false`.
@@ -225,10 +275,11 @@ ajustar o cambiar de entorno.
 | `PAYMENT_DEFAULT_CURRENCY` | `ARS` | Moneda por defecto |
 | `MERCADO_PAGO_ACCESS_TOKEN` | vacío | Token de acceso |
 | `MERCADO_PAGO_WEBHOOK_SECRET` | vacío | Secreto del webhook |
-| `MERCADO_PAGO_NOTIFICATION_URL` | vacío | URL pública de notificaciones |
-| `MERCADO_PAGO_BACK_URL_SUCCESS` | `https://tienda.com/checkout/success` | Redirección: éxito |
-| `MERCADO_PAGO_BACK_URL_FAILURE` | `https://tienda.com/checkout/failure` | Redirección: fallo |
-| `MERCADO_PAGO_BACK_URL_PENDING` | `https://tienda.com/checkout/pending` | Redirección: pendiente |
+| `MERCADO_PAGO_NOTIFICATION_URL` | `http://localhost:8080/api/webhooks/mercado-pago` | URL pública de notificaciones |
+| `MERCADO_PAGO_BACK_URL_SUCCESS` | `http://localhost:3000/checkout/success` | Redirección: éxito |
+| `MERCADO_PAGO_BACK_URL_FAILURE` | `http://localhost:3000/checkout/failure` | Redirección: fallo |
+| `MERCADO_PAGO_BACK_URL_PENDING` | `http://localhost:3000/checkout/pending` | Redirección: pendiente |
+| `MERCADO_PAGO_STATEMENT_DESCRIPTOR` | `La Tiendita` | `statement_descriptor` de la preferencia (resumen de la tarjeta) |
 
 ---
 

@@ -30,6 +30,25 @@ configMapGenerator:
     behavior: merge
     literals:
       - APP_SEED_ENABLED=true
+  # URLs de Mercado Pago para kind / k3d.
+  #
+  # No hay Ingress en local (se entra por port-forward), así que Mercado Pago
+  # no puede tocar el clúster: hace falta un túnel público que repunte al
+  # port-forward del gateway (webhook) y del frontend (retorno del checkout).
+  # Reemplazar CHANGE-ME-tunel por el dominio que entregue ngrok o cloudflared.
+  #
+  #   kubectl port-forward svc/gateway 8080:80 -n latiendita
+  #   kubectl port-forward svc/frontend 3000:80 -n latiendita
+  #   ngrok http 8080        # -> CHANGE-ME-tunel.ngrok-free.app
+  #
+  # Ojo: las back_urls NO aceptan localhost, por eso también van por el túnel.
+  - name: payment-service-config
+    behavior: merge
+    literals:
+      - MERCADO_PAGO_NOTIFICATION_URL=https://CHANGE-ME-tunel/api/webhooks/mercado-pago
+      - MERCADO_PAGO_BACK_URL_SUCCESS=https://CHANGE-ME-tunel/checkout/success
+      - MERCADO_PAGO_BACK_URL_FAILURE=https://CHANGE-ME-tunel/checkout/failure
+      - MERCADO_PAGO_BACK_URL_PENDING=https://CHANGE-ME-tunel/checkout/pending
 
 secretGenerator:
   - name: latiendita-secrets

@@ -356,6 +356,16 @@ services:
       ORDER_SERVICE_BASE_URL: http://order-service:8080
       MERCADO_PAGO_ACCESS_TOKEN: ${MERCADO_PAGO_ACCESS_TOKEN:-}
       MERCADO_PAGO_WEBHOOK_SECRET: ${MERCADO_PAGO_WEBHOOK_SECRET:-}
+      # Mercado Pago exige URLs con dominio con nombre: localhost/127.0.0.1 no
+      # sirven ni para notification_url ni para back_urls (MP muestra "Algo ha
+      # salido mal"). En local se apunta a un túnel (ngrok/cloudflared) que
+      # repunta al gateway y al frontend; ver docs/environment/enviroment.md.
+      MERCADO_PAGO_NOTIFICATION_URL: ${MERCADO_PAGO_NOTIFICATION_URL:-http://localhost:8080/api/webhooks/mercado-pago}
+      MERCADO_PAGO_BACK_URL_SUCCESS: ${MERCADO_PAGO_BACK_URL_SUCCESS:-http://localhost:3000/checkout/success}
+      MERCADO_PAGO_BACK_URL_FAILURE: ${MERCADO_PAGO_BACK_URL_FAILURE:-http://localhost:3000/checkout/failure}
+      MERCADO_PAGO_BACK_URL_PENDING: ${MERCADO_PAGO_BACK_URL_PENDING:-http://localhost:3000/checkout/pending}
+      # Aparece en el resumen de la tarjeta del titular (máx. ~12 caracteres).
+      MERCADO_PAGO_STATEMENT_DESCRIPTOR: ${MERCADO_PAGO_STATEMENT_DESCRIPTOR:-La Tiendita}
       EUREKA_URL: http://eureka-server:8761/eureka
     depends_on:
       payments-db:

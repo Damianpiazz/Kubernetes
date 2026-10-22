@@ -25,6 +25,7 @@ Todas las rutas son relativas a la raíz del servicio (ej. `http://payments:8080
 | `GET` | `/api/payments` | Lista los pagos del cliente autenticado (`page`, `size`, `sort`) | — | `200` Page\<PaymentResponse\> | Sí (Gateway) |
 | `GET` | `/api/payments/{paymentId}` | Obtiene un pago por su ID (solo si es del cliente) | — | `200` PaymentResponse | Sí (Gateway) |
 | `GET` | `/api/payments/order/{orderId}` | Obtiene el pago de un pedido (solo si es del cliente) | — | `200` PaymentResponse | Sí (Gateway) |
+| `GET` | `/api/payments/reference/{externalReference}` | Obtiene el pago por su `external_reference` (= `orderNumber`) | — | `200` PaymentResponse | Sí (Gateway) |
 
 ### 2.2 Webhooks — `WebhookController`
 
@@ -74,6 +75,28 @@ Frontend ──POST /api/payments──▶ payment-service ──PreferenceClien
                 └──▶ update payment + outbox ──▶ Kafka `payment-events`
                                                     └──▶ order-service → PENDING→PAID
 ```
+
+### 2.4 Qué se envía a la preferencia (calidad de integración)
+
+`MercadoPagoAdapter.createPreference()` arma la preferencia con:
+
+| Campo | Valor | Origen |
+|---|---|---|
+| `items[].id` | `productId` | `order-service` (conciliación contra nuestro catálogo) |
+| `items[].title` | `productTitle` | `order-service` |
+| `items[].description` | `productTitle` | `order-service` no expone descripciones largas |
+| `items[].quantity` / `unit_price` | ítems del pedido | `order-service` |
+| `payer.email` | `payerEmail` del request | Frontend, del `email` del JWT |
+| `external_reference` | `orderNumber` | Único eslabón entre Mercado Pago y nuestro pago |
+| `back_urls.*` / `notification_url` | Configuración por entorno | `MERCADO_PAGO_*_URL` |
+| `statement_descriptor` | `MERCADO_PAGO_STATEMENT_DESCRIPTOR` | Resumen de la tarjeta del titular |
+| `auto_return` | `approved` | Fijo |
+
+Pendiente de sumar (mejoran el puntaje del *checklist de calidad*): `payer.last_name`
+(ya que `CreatePaymentRequest` sólo recibe el email) y `items.category_id` (no
+hay categoría en `order-service`). La numeración que manda Mercado Pago para
+`items[].id` usa `productId`; con `sku` sería más estable, pero `order-service`
+no lo expone en su `OrderItemDto`.
 
 ---
 
@@ -235,10 +258,11 @@ Reglas:
 | `PAYMENT_DEFAULT_CURRENCY` | Moneda por defecto | ❌ | `ARS` | `ARS` |
 | `MERCADO_PAGO_ACCESS_TOKEN` | Access Token de Mercado Pago | ✅ en producción | *(vacío → 503)* | `TEST-xxxxxxxx` |
 | `MERCADO_PAGO_WEBHOOK_SECRET` | Secreto para validar `x-signature` | ✅ | *(vacío → webhook ignorado)* | *(secret)* |
-| `MERCADO_PAGO_NOTIFICATION_URL` | URL pública del webhook | ✅ en producción | *(vacío)* | `https://api.tienda.com/api/webhooks/mercado-pago` |
-| `MERCADO_PAGO_BACK_URL_SUCCESS` | `back_urls.success` | ❌ | `https://tienda.com/checkout/success` | — |
-| `MERCADO_PAGO_BACK_URL_FAILURE` | `back_urls.failure` | ❌ | `https://tienda.com/checkout/failure` | — |
-| `MERCADO_PAGO_BACK_URL_PENDING` | `back_urls.pending` | ❌ | `https://tienda.com/checkout/pending` | — |
+| `MERCADO_PAGO_NOTIFICATION_URL` | URL pública del webhook | ✅ en producción | `http://localhost:8080/api/webhooks/mercado-pago` | `https://api.tienda.com/api/webhooks/mercado-pago` |
+| `MERCADO_PAGO_BACK_URL_SUCCESS` | `back_urls.success` | ❌ | `http://localhost:3000/checkout/success` | `https://tienda.com/checkout/success` |
+| `MERCADO_PAGO_BACK_URL_FAILURE` | `back_urls.failure` | ❌ | `http://localhost:3000/checkout/failure` | `https://tienda.com/checkout/failure` |
+| `MERCADO_PAGO_BACK_URL_PENDING` | `back_urls.pending` | ❌ | `http://localhost:3000/checkout/pending` | `https://tienda.com/checkout/pending` |
+| `MERCADO_PAGO_STATEMENT_DESCRIPTOR` | `statement_descriptor` de la preferencia | ❌ | `La Tiendita` | `La Tiendita` |
 | `EUREKA_URL` | Registry de Eureka para registrarse | ❌ | `http://localhost:8761/eureka` | `http://eureka:8761/eureka` |
 | `EUREKA_ENABLED` | Habilita el cliente Eureka (`false` para correr sin registry) | ❌ | `true` | `true` |
 | `LOGGING_LEVEL_ROOT` | Nivel de log | ❌ | `INFO` | `INFO` |
@@ -246,13 +270,15 @@ Reglas:
 > Las `back_urls` vienen **de configuración**, nunca del request: el cliente solo envía `orderId`, lo que elimina el riesgo de open redirect / phishing.
 >
 > El access token se inicializa de forma **perezosa** en cada llamada (no en `@PostConstruct`): el servicio arranca y responde `/actuator/health` aunque no haya credenciales, y solo devuelve `503` cuando alguien intenta realmente usar el proveedor.
+>
+> **Mercado Pago rechaza `localhost` y `127.0.0.1`** tanto en `notification_url` como en las `back_urls`. Los defaults `localhost` de arriba sólo sirven para que el servicio arranque sin config; para probar el flujo de verdad hay que apuntar esas cuatro variables a un túnel público (`ngrok`/`cloudflared`) — ver *Pago con Mercado Pago en local* en `docs/environment/enviroment.md`.
 
 ### 5.2 Spring profiles
 
 | Profile | Uso |
 |---|---|
 | `test` | Tests automatizados (Testcontainers PostgreSQL + EmbeddedKafka; `MercadoPagoAdapter` y `OrderClient` mockeados con `@MockitoBean`; relay congelado con `poll-interval-ms=600000`) |
-| `local` | Desarrollo con `docker compose` *(pendiente)* |
+| `local` | Desarrollo con `docker compose`: toda la config llega por variables del `.env` (ver `docs/environment/enviroment.md`). **Opcional**: sin `MERCADO_PAGO_ACCESS_TOKEN` el servicio arranca igual y sólo responde `503` al crear un pago |
 | `k8s` | Despliegue en Kubernetes: manifiestos en `k8s/apps/base/payment-service` + environments. Sin perfil `application-k8s.properties`; la config se inyecta por ConfigMap y Secret |
 
 > **Kubernetes y Eureka**: en k8s este servicio corre con `EUREKA_ENABLED=false` (ver `k8s/apps/base/payment-service/configmap.yaml`). No hay registro en Eureka ni descubrimiento `lb://`: el tráfico entra por el Gateway, que apunta a una URL directa (`PAYMENT_SERVICE_BASE_URL=http://payment-service`), y este servicio llama a `order-service` vía `ORDER_SERVICE_BASE_URL=http://order-service`. `eureka-server` **no se despliega** en el clúster (solo aplica a desarrollo local).

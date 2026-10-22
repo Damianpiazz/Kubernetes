@@ -19,7 +19,7 @@ class WebhookSignatureValidatorTest {
         return new WebhookSignatureValidator(new MercadoPagoProperties(
                 "access-token", secret, "https://api.tienda.com/webhook",
                 "https://tienda.com/success", "https://tienda.com/failure",
-                "https://tienda.com/pending"));
+                "https://tienda.com/pending", "La Tiendita"));
     }
 
     @Test
@@ -86,14 +86,40 @@ class WebhookSignatureValidatorTest {
 
     @Test
     void shouldHandleNullResourceIdWithoutFailing() {
-        String v1 = hmacHex(SECRET, template("", REQUEST_ID, TS));
+        String v1 = hmacHex(SECRET, templateWithoutId(REQUEST_ID, TS));
         String header = "ts=" + TS + ",v1=" + v1;
 
         assertThat(validator(SECRET).isValid(header, REQUEST_ID, null)).isTrue();
     }
 
+    /**
+     * Mercado Pago pide remover el segmento entero cuando el valor no está, no
+     * dejarlo vacío: si el manifest quedara "id:;request-id:...;ts:...;" el HMAC
+     * no coincidiría con el que calculó Mercado Pago.
+     */
+    @Test
+    void shouldRemoveIdSegmentWhenResourceIdIsBlank() {
+        String v1 = hmacHex(SECRET, templateWithoutId(REQUEST_ID, TS));
+        String header = "ts=" + TS + ",v1=" + v1;
+
+        assertThat(validator(SECRET).isValid(header, REQUEST_ID, "")).isTrue();
+        assertThat(validator(SECRET).isValid(header, REQUEST_ID, "  ")).isTrue();
+    }
+
+    @Test
+    void shouldRejectEmptyIdSegmentWhenSignatureWasComputedWithIdRemoved() {
+        String v1 = hmacHex(SECRET, "id:;request-id:" + REQUEST_ID + ";ts:" + TS + ";");
+        String header = "ts=" + TS + ",v1=" + v1;
+
+        assertThat(validator(SECRET).isValid(header, REQUEST_ID, RESOURCE_ID)).isFalse();
+    }
+
     private static String template(String resourceId, String requestId, String ts) {
         return "id:" + resourceId + ";request-id:" + requestId + ";ts:" + ts + ";";
+    }
+
+    private static String templateWithoutId(String requestId, String ts) {
+        return "request-id:" + requestId + ";ts:" + ts + ";";
     }
 
     private static String hmacHex(String secret, String payload) {

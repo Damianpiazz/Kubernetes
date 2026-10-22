@@ -9,4 +9,5 @@ public record MercadoPagoProperties(
         String notificationUrl,
         String backUrlSuccess,
         String backUrlFailure,
-        String backUrlPending) {}
+        String backUrlPending,
+        String statementDescriptor) {}

@@ -6,11 +6,12 @@
 #
 #   apps → DNS (kube-system)                    :53    [resolución corta: kafka, *-db]
 #   apps → Postgres / Kafka (mismo namespace)   :5432 / :9092
+#   apps → azurite (mismo namespace)            :10000 [storage de imágenes]
 #   apps → alloy (ns latiendita-observability)  :4318  [OTLP]
 #   apps → backends (proxy del gateway, order→product, payment→order) :8080
 #
-# Los pods de datos (Postgres/Kafka) no generan tráfico saliente; no reciben
-# permisos de egress y quedan sin salir del clúster.
+# Los pods de datos (Postgres/Kafka/Azurite) no generan tráfico saliente; no
+# reciben permisos de egress y quedan sin salir del clúster.
 #
 # En producción NO se aplica: las bases de datos y Kafka son servicios
 # gestionados con endpoints externos, y un deny de egress los rompería sin
@@ -83,10 +84,13 @@ spec:
                   - orders-db
                   - payments-db
                   - kafka
+                  - azurite
       ports:
         - port: 5432
           protocol: TCP
         - port: 9092
+          protocol: TCP
+        - port: 10000
           protocol: TCP
 ---
 # Tráfico este-oeste entre servicios: el espejo de allow-app-ingress (base).
@@ -182,4 +186,34 @@ spec:
               app.kubernetes.io/name: alloy
       ports:
         - port: 4318
+          protocol: TCP
+---
+# Salida de payment-service a la API de Mercado Pago (api.mercadopago.com:443).
+# Sin esta regla el SDK no puede crear preferencias ni consultar pagos desde
+# kind/k3d, y el default-deny-egress de arriba se traga el error en silencio.
+#
+# NetworkPolicy no entiende FQDN: con las CNI del stack local (kindnetd,
+# flannel) solo se puede matchear por IP, y las de Mercado Pago cambian. Por
+# eso se abre 0.0.0.0/0 SOLO en el puerto 443 y SOLO desde los pods de
+# payment-service: es lo mínimo que funciona sin depender de una lista de IPs
+# ajena. Si más adelante la CNI soporta dominios (Cilium y similares), acotar
+# a api.mercadopago.com.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-payment-egress-https
+  labels:
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: payment-service
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - port: 443
           protocol: TCP
