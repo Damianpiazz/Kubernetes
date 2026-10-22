@@ -18,52 +18,75 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+/**
+ * Propaga la identidad del JWT a los servicios internos.
+ *
+ * Los microservicios no validan el token (sólo lo hace el gateway), así que la
+ * identidad viaja por header: `X-User-Id` con el `sub` y `X-User-Email` con el
+ * claim `email`. El segundo es necesario en user-service, cuyo perfil se busca
+ * por correo: su id de base de datos es distinto del id de la cuenta.
+ *
+ * Los headers se pisan SIEMPRE con los claims del token (aunque vengan en
+ * null), de modo que un cliente no pueda suplantar su identidad mandándolos a
+ * mano.
+ */
 @Component
 @Order(Ordered.LOWEST_PRECEDENCE - 100)
 public class IdentityPropagationFilter extends OncePerRequestFilter {
 
     public static final String USER_HEADER = "X-User-Id";
+    public static final String EMAIL_HEADER = "X-User-Email";
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        String sub = currentSub();
-
-        filterChain.doFilter(new UserIdRequestWrapper(request, sub), response);
+        filterChain.doFilter(new IdentityRequestWrapper(request, currentIdentity()), response);
     }
 
-    private String currentSub() {
+    private Identity currentIdentity() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getPrincipal() instanceof Jwt jwt) {
-            return jwt.getSubject();
+            return new Identity(jwt.getSubject(), jwt.getClaimAsString("email"));
         }
-        return null;
+        return new Identity(null, null);
     }
 
-    private static final class UserIdRequestWrapper extends HttpServletRequestWrapper {
+    private record Identity(String sub, String email) {}
 
-        private final String userId;
+    private static final class IdentityRequestWrapper extends HttpServletRequestWrapper {
 
-        private UserIdRequestWrapper(HttpServletRequest request, String userId) {
+        private final Identity identity;
+
+        private IdentityRequestWrapper(HttpServletRequest request, Identity identity) {
             super(request);
-            this.userId = userId;
+            this.identity = identity;
         }
 
         @Override
         public String getHeader(String name) {
             if (USER_HEADER.equalsIgnoreCase(name)) {
-                return userId;
+                return identity.sub();
+            }
+            if (EMAIL_HEADER.equalsIgnoreCase(name)) {
+                return identity.email();
             }
             return super.getHeader(name);
         }
 
         @Override
         public Enumeration<String> getHeaders(String name) {
+            String value = null;
             if (USER_HEADER.equalsIgnoreCase(name)) {
-                if (userId == null) {
-                    return Collections.emptyEnumeration();
-                }
-                return Collections.enumeration(Collections.singletonList(userId));
+                value = identity.sub();
+            } else if (EMAIL_HEADER.equalsIgnoreCase(name)) {
+                value = identity.email();
+            }
+
+            if (value != null) {
+                return Collections.enumeration(Collections.singletonList(value));
+            }
+            if (USER_HEADER.equalsIgnoreCase(name) || EMAIL_HEADER.equalsIgnoreCase(name)) {
+                return Collections.emptyEnumeration();
             }
             return super.getHeaders(name);
         }
@@ -75,12 +98,15 @@ public class IdentityPropagationFilter extends OncePerRequestFilter {
             while (original.hasMoreElements()) {
                 String name = original.nextElement();
 
-                if (!USER_HEADER.equalsIgnoreCase(name)) {
+                if (!USER_HEADER.equalsIgnoreCase(name) && !EMAIL_HEADER.equalsIgnoreCase(name)) {
                     names.add(name);
                 }
             }
-            if (userId != null) {
+            if (identity.sub() != null) {
                 names.add(USER_HEADER);
+            }
+            if (identity.email() != null) {
+                names.add(EMAIL_HEADER);
             }
             return Collections.enumeration(names);
         }

@@ -64,6 +64,41 @@ class IdentityPropagationFilterTest {
         assertThat(seen[0]).isNull();
     }
 
+    @Test
+    void inyectaElClaimEmailComoXUserEmail() throws Exception {
+        authenticate("42", "ana@mail.com");
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/users/me");
+        final String[] seen = new String[1];
+
+        filter.doFilter(request, new MockHttpServletResponse(), capturingEmail(seen));
+
+        assertThat(seen[0]).isEqualTo("ana@mail.com");
+    }
+
+    @Test
+    void descartaElXUserEmailSpoofeadoDelCliente() throws Exception {
+        authenticate("42", "ana@mail.com");
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/users/me");
+        request.addHeader(IdentityPropagationFilter.EMAIL_HEADER, "atacante@mail.com");
+        final String[] seen = new String[1];
+
+        filter.doFilter(request, new MockHttpServletResponse(), capturingEmail(seen));
+
+        assertThat(seen[0]).isEqualTo("ana@mail.com");
+    }
+
+    @Test
+    void sinClaimEmailNoSeteaElHeader() throws Exception {
+        authenticate("42");
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/users/me");
+        request.addHeader(IdentityPropagationFilter.EMAIL_HEADER, "atacante@mail.com");
+        final String[] seen = new String[1];
+
+        filter.doFilter(request, new MockHttpServletResponse(), capturingEmail(seen));
+
+        assertThat(seen[0]).isNull();
+    }
+
     private MockFilterChain capturing(String[] seen) {
         return new MockFilterChain() {
             @Override
@@ -74,5 +109,33 @@ class IdentityPropagationFilterTest {
                 super.doFilter(req, res);
             }
         };
+    }
+
+    private MockFilterChain capturingEmail(String[] seen) {
+        return new MockFilterChain() {
+            @Override
+            public void doFilter(jakarta.servlet.ServletRequest req,
+                                 jakarta.servlet.ServletResponse res) throws IOException, jakarta.servlet.ServletException {
+                seen[0] = ((jakarta.servlet.http.HttpServletRequest) req)
+                        .getHeader(IdentityPropagationFilter.EMAIL_HEADER);
+                super.doFilter(req, res);
+            }
+        };
+    }
+
+    private void authenticate(String sub, String email) {
+        Jwt jwt;
+        if (email != null) {
+            jwt = Jwt.withTokenValue("token").header("alg", "HS256")
+                    .subject(sub).issuer("auth-service")
+                    .claim("email", email)
+                    .build();
+        } else {
+            jwt = Jwt.withTokenValue("token").header("alg", "HS256")
+                    .subject(sub).issuer("auth-service")
+                    .build();
+        }
+        SecurityContextHolder.getContext().setAuthentication(
+                new TestingAuthenticationToken(jwt, null, java.util.List.of()));
     }
 }
