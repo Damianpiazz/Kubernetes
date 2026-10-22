@@ -54,6 +54,15 @@ x-frontend-limits: &frontend-limits
       cpus: "0.50"
       memory: 384M
 
+x-azurite-limits: &azurite-limits
+  resources:
+    reservations:
+      cpus: "0.05"
+      memory: 64M
+    limits:
+      cpus: "0.25"
+      memory: 192M
+
 services:
   eureka-server:
     build: ./services/eureka-server
@@ -96,6 +105,25 @@ services:
       timeout: 10s
       retries: 5
       start_period: 120s
+    restart: unless-stopped
+
+  azurite:
+    # Emulador oficial de Azure Blob Storage: mismo SDK y mismo formato de
+    # endpoint que Azure Blob Storage en producción (solo cambian las env vars).
+    image: mcr.microsoft.com/azure-storage/azurite:3.34.0
+    deploy: *azurite-limits
+    command: azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --location /data
+    volumes:
+      - azurite_data:/data
+    networks:
+      - data-products
+    healthcheck:
+      # La imagen no trae curl/wget: chequeo TCP vía el node que ya trae.
+      test: ["CMD", "node", "-e", "require('net').connect(10000,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     restart: unless-stopped
 
   auth-db:
@@ -258,8 +286,21 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${PRODUCTS_DB_PASSWORD:?Defina PRODUCTS_DB_PASSWORD en .env}
       EUREKA_URL: http://eureka-server:8761/eureka
       APP_SEED_ENABLED: "true"
+      AZURE_STORAGE_ENDPOINT: http://azurite:10000/devstoreaccount1
+      AZURE_STORAGE_ACCOUNT: devstoreaccount1
+      AZURE_STORAGE_CONTAINER: productos
+      # Storage de imágenes: Azurite local. La clave por defecto es la credencial
+      # fija que publica Microsoft para "devstoreaccount1" (NO es un secreto) y
+      # sale de la propia imagen de Azurite; se puede sobreescribir desde .env
+      # (p. ej. para apuntar a un Azure Blob Storage real). Ojo: tiene que ser
+      # EXACTAMENTE la constante EMULATOR_ACCOUNT_KEY_STR de la imagen: cualquier
+      # otro valor (p. ej. la clave del emulator legacy) da 403 AuthorizationFailure
+      # en cada request.
+      AZURE_STORAGE_KEY: ${AZURE_STORAGE_KEY:-Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}
     depends_on:
       products-db:
+        condition: service_healthy
+      azurite:
         condition: service_healthy
       eureka-server:
         condition: service_healthy
@@ -411,6 +452,7 @@ networks:
 
 volumes:
   kafka_data:
+  azurite_data:
   auth_data:
   users_data:
   products_data:
