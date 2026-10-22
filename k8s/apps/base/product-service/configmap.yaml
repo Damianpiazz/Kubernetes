@@ -8,6 +8,13 @@ metadata:
 data:
   SPRING_DATASOURCE_URL: jdbc:postgresql://products-db:5432/products
   SPRING_DATASOURCE_USERNAME: products
+  # Storage de imágenes: Azurite vive en el tier de datos local (data/base).
+  # La cuenta "devstoreaccount1" es fija del emulador, no es un secreto (la
+  # key sí va en latiendita-secrets). En producción lo sobrescribe el overlay
+  # de production (endpoint y cuenta reales de Azure Blob Storage).
+  AZURE_STORAGE_ENDPOINT: http://azurite:10000/devstoreaccount1
+  AZURE_STORAGE_ACCOUNT: devstoreaccount1
+  AZURE_STORAGE_CONTAINER: productos
   EUREKA_ENABLED: "false"
   # Tracing: Alloy recibe el OTLP y lo reenvía a Tempo. Nombre FQDN porque
   # Alloy vive en el namespace latiendita-observability (cruza namespaces).

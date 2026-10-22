@@ -75,6 +75,14 @@
 		</dependency>
 
 		<dependency>
+			<groupId>com.azure</groupId>
+			<artifactId>azure-storage-blob</artifactId>
+			<!-- Spring Boot no gestiona el BOM de Azure: versión fija.
+			     Última estable conocida; verificar al actualizar el resto. -->
+			<version>12.30.0</version>
+		</dependency>
+
+		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
 			<scope>runtime</scope>

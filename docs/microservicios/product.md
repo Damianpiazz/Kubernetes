@@ -21,6 +21,7 @@ Todas las rutas son relativas a la raíz del servicio (ej. `http://products:8080
 | `GET` | `/actuator/health` | Health check para probes de Kubernetes | — | `200` `{ status }` | No |
 | `GET` | `/api/products` | Lista productos paginada (`page`, `size`, `sort`) | — | `200` Page\<ProductDto\> | Sí (Gateway) |
 | `GET` | `/api/products/{productId}` | Obtiene un producto por su ID | — | `200` ProductDto | Sí (Gateway) |
+| `GET` | `/api/products/{productId}/image` | Sirve la imagen del producto (proxy al storage de blobs con `Cache-Control`; `302` si `image_url` es una URL externa) | — | `200` image bytes / `302` / `404` | Sí (Gateway) |
 | `POST` | `/api/products` | Crea un producto | `ProductDto` | `201` ProductDto + `Location` | Sí (Gateway) |
 | `PUT` | `/api/products` | Actualiza un producto (ID en el body) | `ProductDto` (con `productId`) | `200` ProductDto | Sí (Gateway) |
 | `PUT` | `/api/products/{productId}` | Actualiza un producto (ID en la ruta) | `ProductDto` | `200` ProductDto | Sí (Gateway) |
@@ -100,7 +101,7 @@ Formato de respuesta de error: **ProblemDetail (RFC 7807)**, devuelto por `Globa
 |---|---|---|---|---|---|
 | `id` | `bigint` (autoincrement) | ✅ | ❌ | ✅ | Identificador único (inmutable) |
 | `title` | `varchar(255)` | ❌ | ✅ | ❌ | Título descriptivo del producto |
-| `image_url` | `varchar(500)` | ❌ | ✅ | ❌ | URL de la imagen |
+| `image_url` | `varchar(500)` | ❌ | ✅ | ❌ | Clave del blob en el storage de imágenes (`productos/<uuid>.<ext>`) o URL externa; servida por `GET /{id}/image` |
 | `sku` | `varchar(100)` | ❌ | ❌ | ✅ | Código único de inventario |
 | `price` | `numeric(12,2)` | ❌ | ✅ | ❌ | Precio unitario |
 | `quantity` | `int` | ❌ | ✅ | ❌ | Unidades disponibles |
@@ -151,6 +152,10 @@ No hay relaciones JPA (`@ManyToOne`) en este servicio: se mantiene el desacoplam
 | `EUREKA_ENABLED` | Habilita el cliente Eureka (`false` para correr sin registry) | ❌ | `true` | `true` |
 | `APP_SEED_ENABLED` | Habilita el seed de datos al arrancar (solo desarrollo) | ❌ | `false` | `true` |
 | `APP_SEED_LOCATION` | Directorio con los JSON de seed (vacío = classpath embebido en la imagen) | ❌ | *(vacío)* | `/datos/seed` |
+| `AZURE_STORAGE_ENDPOINT` | Endpoint del storage de imágenes (Azure Blob Storage en prod / Azurite en local) | ❌ | `http://localhost:10000/devstoreaccount1` | `https://cuenta.blob.core.windows.net` |
+| `AZURE_STORAGE_ACCOUNT` | Cuenta del storage de imágenes | ❌ | `devstoreaccount1` | `cuentatienda` |
+| `AZURE_STORAGE_KEY` | Clave de la cuenta (secret). Vacío ⇒ storage deshabilitado (arranca igual, sin imágenes) | ❌ | *(vacío)* | *(secret)* |
+| `AZURE_STORAGE_CONTAINER` | Container destino | ❌ | `productos` | `productos` |
 | `LOGGING_LEVEL_ROOT` | Nivel de log | ❌ | `INFO` | `INFO` |
 
 ### 5.2 Spring profiles
@@ -189,6 +194,7 @@ No hace llamadas HTTP sincrónicas ni consume eventos de otros servicios (por ah
 | Dependencia | Tipo | Para qué | Crítica | Comportamiento si cae |
 |---|---|---|---|---|
 | PostgreSQL | Base de datos | Persistencia principal | ✅ Sí | `503`, readiness en `DOWN` |
+| Azure Blob Storage (Azurite en local) | Storage de imágenes (blob) | Subir/borrar/leer imágenes de productos (`ImageStorageService`) | ❌ No | El servicio sigue `ready` (el storage **no** está en el readiness group); `GET /{id}/image` → `404` y los uploads fallan hasta que vuelva |
 
 ### 6.3 Eventos publicados/consumidos
 
@@ -224,6 +230,7 @@ Carga inicial de datos desde JSON, pensada **solo para desarrollo local** (`comp
 |---|---|
 | `src/main/resources/seed/categories.json` | Categorías de ropa (Remeras, Pantalones, Buzos, Zapatillas, Accesorios) |
 | `src/main/resources/seed/products.json` | Productos con `category` referenciado **por nombre** (no por ID) |
+| `src/main/resources/seed/images/<SKU>.<ext>` | Foto de cada producto; se sube al storage como clave `productos/<SKU>.<ext>` |
 
 Implementación: `seed/CatalogSeedRunner` (un `ApplicationRunner`).
 
@@ -231,4 +238,5 @@ Implementación: `seed/CatalogSeedRunner` (un `ApplicationRunner`).
 - **Sin IDs hardcodeados**: cada producto resuelve su `categoryId` en runtime a partir del nombre de la categoría.
 - **Errores aislados**: una fila inválida se loguea (`[seed] ...`) y no detiene el resto de la carga.
 - **Orden garantizado**: primero categorías, luego productos (en un único runner).
+- **Imágenes**: `seed/images/<SKU>.*` se suben al storage (Azurite/Azure) con clave determinística `productos/<SKU>.<ext>` —sondeando `jpg`, `jpeg`, `png`, `webp` y `gif`, y re-subiendo en cada arranque para reparar un volumen limpio— y se asignan como `imageUrl` solo si el producto no tiene uno (insert-only). Best-effort: si el storage está caído o deshabilitado (`app.storage.key` vacío) se loguea y el arranque continúa. El frontend las pide siempre por el proxy `GET /api/products/{id}/image`.
 - **Ubicación externa**: `APP_SEED_LOCATION` apunta a un directorio en disco (p. ej. un ConfigMap montado en k8s) en lugar del classpath, permitiendo cambiar datos sin rebuild de la imagen.

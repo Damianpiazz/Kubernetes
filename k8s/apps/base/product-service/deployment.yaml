@@ -85,6 +85,13 @@ spec:
                 secretKeyRef:
                   name: latiendita-secrets
                   key: PRODUCTS_DB_PASSWORD
+            # Clave de la cuenta de storage de imágenes (Azurite en local,
+            # Azure Blob Storage en producción).
+            - name: AZURE_STORAGE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: latiendita-secrets
+                  key: AZURE_STORAGE_KEY
           lifecycle:
             preStop:
               exec:
