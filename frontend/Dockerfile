@@ -1,12 +1,17 @@
 # Frontend (Next.js 16) — build multi-etapa con pnpm, runtime standalone.
 #
-# NEXT_PUBLIC_API_URL se inyecta como build-ARG: Next.js inlinea las variables
-# NEXT_PUBLIC_* en el bundle del browser en tiempo de BUILD, así que no existe
-# como variable runtime (un configmap/env en k8s no la cambiaría):
-#   compose / kind local : default http://localhost:8080 (gateway publicado o
-#                          port-forward svc/gateway 8080:80)
-#   producción           : docker build --build-arg NEXT_PUBLIC_API_URL=https://<dominio>
-# Cambiar la URL = rebuild de la imagen.
+# NEXT_PUBLIC_API_URL y NEXT_PUBLIC_DATA_MODE se inyectan como build-ARGs:
+# Next.js inlinea las variables NEXT_PUBLIC_* en el bundle del browser en
+# tiempo de BUILD, así que no existen como variable runtime (un configmap/env
+# en k8s no las cambiaría):
+#   NEXT_PUBLIC_API_URL  : URL del gateway.
+#                          compose / kind local: default http://localhost:8080
+#                          (gateway publicado o port-forward svc/gateway 8080:80)
+#                          producción: --build-arg NEXT_PUBLIC_API_URL=https://<dominio>
+#   NEXT_PUBLIC_DATA_MODE: 'api' (default) contra los microservicios, o 'mock'
+#                          para una demo sin backend: los datos de ejemplo viven
+#                          en el bundle y no se toca ningún servicio.
+# Cambiar cualquiera de las dos = rebuild de la imagen.
 
 FROM node:22-alpine AS deps
 # pnpm vía npm en vez de corepack: evita la rotación de claves de verificación
@@ -21,7 +26,9 @@ FROM deps AS build
 WORKDIR /app
 COPY . .
 ARG NEXT_PUBLIC_API_URL=http://localhost:8080
+ARG NEXT_PUBLIC_DATA_MODE=api
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_DATA_MODE=$NEXT_PUBLIC_DATA_MODE
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 

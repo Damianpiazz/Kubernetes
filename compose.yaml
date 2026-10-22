@@ -427,6 +427,8 @@ services:
       args:
         # URL del gateway vista DESDE el browser (Next la inlinea en build).
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+        # 'api' (default) contra el gateway, o 'mock' para una demo sin backend.
+        NEXT_PUBLIC_DATA_MODE: ${NEXT_PUBLIC_DATA_MODE:-api}
     deploy: *frontend-limits
     ports:
       - "3000:3000"

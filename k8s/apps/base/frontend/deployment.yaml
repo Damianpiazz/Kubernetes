@@ -48,9 +48,10 @@ spec:
           ports:
             - name: http
               containerPort: 3000
-          # SIN variables de entorno: NEXT_PUBLIC_API_URL es build-time (Next
-          # la inlinea en el bundle del browser), no runtime. Cambiar la URL de
-          # la API = rebuild con --build-arg (ver frontend/Dockerfile); no hay
+          # SIN variables de entorno: NEXT_PUBLIC_API_URL y NEXT_PUBLIC_DATA_MODE
+          # son build-time (Next las inlinea en el bundle del browser), no
+          # runtime. Cambiar la URL de la API o el modo de datos = rebuild con
+          # --build-arg (ver frontend/Dockerfile); no hay
           # configmap que agregar acá.
           lifecycle:
             preStop:

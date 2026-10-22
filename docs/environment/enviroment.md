@@ -55,6 +55,8 @@ Archivo de referencia: `.env.example`. Docker Compose lo lee desde la raíz.
 | `MERCADO_PAGO_BACK_URL_PENDING` | `http://localhost:3000/checkout/pending` | Redirección tras un pago en proceso (p. ej. débito o transferencia) |
 | `MERCADO_PAGO_STATEMENT_DESCRIPTOR` | `La Tiendita` | Texto del resumen de la tarjeta del titular (reduce desconocimientos/chargebacks) |
 | `CORS_ALLOWED_ORIGINS` | `*` | Orígenes permitidos por el gateway (CORS) |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8080` | URL del gateway vista desde el browser; se pasa como build-ARG al frontend (ver sección 3) |
+| `NEXT_PUBLIC_DATA_MODE` | `api` | Modo de datos del frontend (`api` contra el backend, `mock` sin backend); build-ARG del frontend (ver sección 3) |
 | `GRAFANA_ADMIN_USER` | `admin` | Usuario admin de Grafana (`compose.observability.yaml`) |
 | `GRAFANA_ADMIN_PASSWORD` | `admin` | Password admin de Grafana (cambiar fuera de desarrollo) |
 | `TRACING_SAMPLING_PROBABILITY` | `0.1` | Probabilidad de muestreo de traces (0.0–1.0) |
@@ -177,19 +179,28 @@ No requieren configuración manual, pero es el valor por defecto en clúster:
 
 Archivo de referencia: `frontend/.env.local.example`. Next.js inlinea las
 variables `NEXT_PUBLIC_*` en el bundle del browser en tiempo de **build**, así
-que la URL de la API no es una variable runtime (un ConfigMap/env de k8s no la
-cambia): hay una vía de inyección por forma de correr el frontend.
+que no son variables runtime (un ConfigMap/env de k8s no las cambia): hay una
+vía de inyección por forma de correr el frontend.
 
-| Dónde se buildea | Valor de `NEXT_PUBLIC_API_URL` |
+| Dónde se buildea | Valor de `NEXT_PUBLIC_API_URL` y `NEXT_PUBLIC_DATA_MODE` |
 |---|---|
 | `pnpm dev` local | `.env.local` (copiado de `.env.local.example`) |
-| Docker Compose / `build-images` | build-ARG del `frontend/Dockerfile`, default `http://localhost:8080` (gateway publicado en el host) |
-| Kubernetes local (kind) | el mismo default: el browser llega al gateway por `port-forward svc/gateway 8080:80` |
+| Docker Compose / `build-images` | build-ARGs del `frontend/Dockerfile`, con defaults `http://localhost:8080` y `api` (gateway publicado en el host) |
+| Kubernetes local (kind) | los mismos defaults: el browser llega al gateway por `port-forward svc/gateway 8080:80` |
 | Kubernetes producción | build en el pipeline con `--build-arg NEXT_PUBLIC_API_URL=https://<dominio>` (host único de UI y API, mismo origen) |
 
 | Variable | Default | Descripción |
 |---|---|---|
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8080` | URL base del gateway vista desde el browser. Producción: `https://<dominio>` (el mismo host que sirve la UI y `/api`) |
+| `NEXT_PUBLIC_DATA_MODE` | `api` | `api` consume los microservicios a través del gateway; `mock` corre el frontend **sin backend**: los datos de ejemplo (usuarios, catálogo, pedidos y pagos) viven en el bundle y se guardan en `localStorage`. El pago simulado se aprueba/rechaza en `/checkout/simulate`. Sirve para demo, E2E sin Docker o revisar la UI cuando el stack está caído |
+
+Modo de datos:
+
+- La elección es **exclusiva**: en `api` no existe ningún fallback silencioso a
+  datos mock; si el backend no responde, la UI muestra el error y ofrece
+  reintentar.
+- En `mock`, una insignia discreta ("modo mock") queda visible en pantalla para
+  no confundir datos de ejemplo con datos reales.
 
 ---
 
