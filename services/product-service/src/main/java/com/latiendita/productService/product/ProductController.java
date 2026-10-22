@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -45,9 +46,19 @@ public class ProductController {
         return productService.update(productId, dto);
     }
 
+    /**
+     * GET /api/products?q=&categoryId=&page=&size=&sort=
+     *
+     * Los filtros son opcionales y combinables: sin parámetros se comporta igual
+     * que antes. `sort` sólo acepta propiedades de la entidad, porque Spring
+     * Data responde 500 ante una propiedad desconocida.
+     */
     @GetMapping
-    public Page<ProductDto> findAll(Pageable pageable) {
-        return productService.findAll(pageable);
+    public Page<ProductDto> findAll(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) Long categoryId,
+            Pageable pageable) {
+        return productService.search(q, categoryId, pageable);
     }
 
     @GetMapping("/{productId}")

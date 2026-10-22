@@ -180,6 +180,62 @@ class ProductApiIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    void shouldFilterProductsByTitleIgnoringCase() throws Exception {
+        productRepository.saveAll(List.of(
+                product("SKU-1", "Remera blanca"),
+                product("SKU-2", "Jean azul")));
+
+        mockMvc.perform(get("/api/products").param("q", "remera"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].title").value("Remera blanca"));
+    }
+
+    @Test
+    void shouldFilterProductsByCategory() throws Exception {
+        CategoryEntity category = categoryRepository.save(
+                CategoryEntity.builder().name("Ropa").build());
+        productRepository.save(productWithCategory("SKU-1", "Remera", category.getId()));
+        productRepository.save(product("SKU-2", "Taza"));
+
+        mockMvc.perform(get("/api/products")
+                        .param("categoryId", String.valueOf(category.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].sku").value("SKU-1"));
+    }
+
+    @Test
+    void shouldCombineTitleAndCategoryFilters() throws Exception {
+        CategoryEntity ropa = categoryRepository.save(
+                CategoryEntity.builder().name("Ropa").build());
+        CategoryEntity hogar = categoryRepository.save(
+                CategoryEntity.builder().name("Hogar").build());
+
+        productRepository.save(productWithCategory("SKU-1", "Remera blanca", ropa.getId()));
+        productRepository.save(productWithCategory("SKU-2", "Jean azul", ropa.getId()));
+        productRepository.save(productWithCategory("SKU-3", "Remera de cocina", hogar.getId()));
+
+        mockMvc.perform(get("/api/products")
+                        .param("q", "remera")
+                        .param("categoryId", String.valueOf(hogar.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].sku").value("SKU-3"));
+    }
+
+    @Test
+    void shouldTreatBlankQueryAsNoFilter() throws Exception {
+        productRepository.saveAll(List.of(
+                product("SKU-1", "Prod1"),
+                product("SKU-2", "Prod2")));
+
+        mockMvc.perform(get("/api/products").param("q", "   "))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(2));
+    }
+
     private String body(ProductDto dto) throws Exception {
         return objectMapper.writeValueAsString(dto);
     }
@@ -188,6 +244,14 @@ class ProductApiIntegrationTest {
         return ProductEntity.builder()
                 .sku(sku)
                 .title(title)
+                .build();
+    }
+
+    private ProductEntity productWithCategory(String sku, String title, Long categoryId) {
+        return ProductEntity.builder()
+                .sku(sku)
+                .title(title)
+                .categoryId(categoryId)
                 .build();
     }
 }

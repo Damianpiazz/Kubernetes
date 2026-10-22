@@ -64,6 +64,32 @@ public class ProductService {
         return productRepository.findAll(pageable).map(ProductMapper::toDto);
     }
 
+    /**
+     * Listado con filtros opcionales del catálogo.
+     *
+     * Se usan queries derivadas (y no una query con parámetros nullables) para
+     * no depender de la inferencia de tipos de Hibernate ante un null.
+     */
+    @Transactional(readOnly = true)
+    public Page<ProductDto> search(String q, Long categoryId, Pageable pageable) {
+        String term = q == null || q.isBlank() ? null : q.trim();
+        boolean byCategory = categoryId != null;
+
+        Page<ProductEntity> page;
+        if (byCategory && term != null) {
+            page = productRepository.findByCategoryIdAndTitleContainingIgnoreCase(
+                    categoryId, term, pageable);
+        } else if (byCategory) {
+            page = productRepository.findByCategoryId(categoryId, pageable);
+        } else if (term != null) {
+            page = productRepository.findByTitleContainingIgnoreCase(term, pageable);
+        } else {
+            page = productRepository.findAll(pageable);
+        }
+
+        return page.map(ProductMapper::toDto);
+    }
+
     @Transactional(readOnly = true)
     public ProductDto findById(Long id) {
         return ProductMapper.toDto(findEntity(id));
