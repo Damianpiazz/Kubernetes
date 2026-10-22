@@ -82,6 +82,20 @@ public class UserService {
         return UserMapper.toResponse(findEntity(id));
     }
 
+    /**
+     * Perfil de la persona autenticada.
+     *
+     * Se busca por el `X-User-Email` que propaga el gateway: el id de esta base
+     * no es el de la cuenta (la entidad se crea por el evento `account-events`),
+     * así que usar `X-User-Id` apuntaría a otro registro.
+     */
+    @Transactional(readOnly = true)
+    public UserResponse findMe(String email) {
+        return userRepository.findByEmail(email)
+                .map(UserMapper::toResponse)
+                .orElseThrow(() -> new UserNotFoundException(email));
+    }
+
     public void delete(Long id) {
         UserEntity user = findEntity(id);
         userRepository.delete(user);

@@ -137,6 +137,32 @@ class UserApiIntegrationTest {
         assertThat(event.getPayload()).contains("ana@mail.com");
     }
 
+    @Test
+    void shouldReturnMeUsingGatewayEmailHeader() throws Exception {
+        userRepository.save(user("ana@mail.com", "ana"));
+
+        mockMvc.perform(get("/api/users/me").header("X-User-Email", "ana@mail.com"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("ana@mail.com"))
+                .andExpect(jsonPath("$.username").value("ana"));
+    }
+
+    @Test
+    void shouldReturn401WhenGatewayIdentityHeaderIsMissing() throws Exception {
+        mockMvc.perform(get("/api/users/me"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.title").value("No autorizado"));
+    }
+
+    @Test
+    void shouldReturn404WhenProfileIsNotCreatedYet() throws Exception {
+        // El perfil se crea por el evento account-events: puede no existir
+        // inmediatamente después del registro.
+        mockMvc.perform(get("/api/users/me").header("X-User-Email", "nadie@mail.com"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Usuario no encontrado"));
+    }
+
     private String body(UserRequest request) throws Exception {
         return objectMapper.writeValueAsString(request);
     }

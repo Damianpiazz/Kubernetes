@@ -52,6 +52,18 @@ public class UserController {
         return userService.findById(id);
     }
 
+    /**
+     * GET /api/users/me
+     *
+     * Perfil de la persona autenticada. Va antes de `/{id}` en el documento,
+     * aunque Spring ya prefiere la ruta literal sobre la de variable: se busca
+     * por el `X-User-Email` que inyecta el gateway desde el claim del JWT.
+     */
+    @GetMapping("/me")
+    public UserResponse findMe() {
+        return userService.findMe(CurrentUser.email());
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         userService.delete(id);

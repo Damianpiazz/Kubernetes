@@ -22,6 +22,11 @@ public class GlobalExceptionHandler {
         return problem(HttpStatus.CONFLICT, "Recurso duplicado", ex.getMessage());
     }
 
+    @ExceptionHandler(MissingGatewayHeaderException.class)
+    public ProblemDetail onMissingGatewayHeader(MissingGatewayHeaderException ex) {
+        return problem(HttpStatus.UNAUTHORIZED, "No autorizado", ex.getMessage());
+    }
+
     @ExceptionHandler(OptimisticLockingFailureException.class)
     public ProblemDetail onOptimisticLock(OptimisticLockingFailureException ex) {
         return problem(HttpStatus.CONFLICT, "Conflicto de concurrencia",
