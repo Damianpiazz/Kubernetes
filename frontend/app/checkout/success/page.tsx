@@ -1,7 +1,5 @@
-import CheckoutResult from '@/components/checkout-result'
+import { CheckoutResult } from '@/features/payment/components/checkout-result'
 
-export const metadata = { title: 'Pago aprobado · latiendita' }
-
-export default function SuccessPage() {
+export default function CheckoutSuccessPage() {
   return <CheckoutResult outcome="success" />
 }

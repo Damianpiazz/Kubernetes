@@ -1,7 +1,5 @@
-import CheckoutResult from '@/components/checkout-result'
+import { CheckoutResult } from '@/features/payment/components/checkout-result'
 
-export const metadata = { title: 'Pago rechazado · latiendita' }
-
-export default function FailurePage() {
+export default function CheckoutFailurePage() {
   return <CheckoutResult outcome="failure" />
 }

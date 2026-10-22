@@ -1,7 +1,5 @@
-import CheckoutResult from '@/components/checkout-result'
+import { CheckoutResult } from '@/features/payment/components/checkout-result'
 
-export const metadata = { title: 'Pago en proceso · latiendita' }
-
-export default function PendingPage() {
+export default function CheckoutPendingPage() {
   return <CheckoutResult outcome="pending" />
 }

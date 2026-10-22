@@ -1,10 +1,11 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import { Providers } from '@/components/providers'
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
-  generator: 'v0.app',
+  title: 'La Tiendita',
+  description:
+    'Tienda de ejemplo construida con microservicios: catálogo, pedidos y pagos con Mercado Pago.',
   icons: {
     icon: [
       {
@@ -38,9 +39,9 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="es">
       <body className="antialiased">
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   )

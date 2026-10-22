@@ -319,3 +319,39 @@ footer > div:not(:first-child) { display: flex; flex-direction: column; gap: .7r
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+/* ===== Estados nuevos: catálogo, formularios y modo mock ===== */
+
+/* Producto sin foto, o cuya imagen no cargó: placeholder en vez de img rota. */
+.product-image-empty { display: grid; place-items: center; align-content: center; gap: .4rem; width: 100%; aspect-ratio: 4 / 5; background: #e9e8e1; color: #a9a8a1; text-align: center; }
+.product-image-empty svg { width: 1.6rem; height: 1.6rem; }
+.product-image-empty span { font-size: .72rem; }
+
+/* Skeleton mientras carga la primera página del catálogo. */
+.product-image.skeleton { aspect-ratio: 4 / 5; background: linear-gradient(90deg, #e9e8e1 25%, #f2f1ec 37%, #e9e8e1 63%); background-size: 400% 100%; animation: catalog-shimmer 1.4s ease infinite; }
+@keyframes catalog-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+
+.product-color { margin: .2rem 0 0; color: #89877f; font-size: .75rem; }
+
+/* Error real del catálogo (backend caído, 4xx, contrato roto) con reintento. */
+.catalog-error { display: grid; place-items: center; align-content: center; gap: .6rem; padding: 3.5rem 1.5rem; text-align: center; }
+.catalog-error svg { width: 2rem; height: 2rem; color: #b08d5a; }
+.catalog-error h3 { margin: .4rem 0 0; font-family: Georgia, serif; font-size: 1.6rem; font-weight: 400; }
+.catalog-error p { max-width: 26rem; margin: 0 0 .8rem; color: #77766f; font-size: .88rem; line-height: 1.6; }
+
+.catalog-refreshing, .category-loading { display: inline-flex; align-items: center; gap: .4rem; color: #89877f; font-size: .78rem; }
+.catalog-refreshing svg, .category-loading svg { width: .9rem; height: .9rem; }
+
+/* Validación por campo del panel de cuenta (Zod y errores del backend). */
+.field-error { color: #a24a41; font-size: .74rem; }
+.account-form input[aria-invalid="true"] { border-color: #c98d85; }
+
+/* Ítem del carrito de un producto sin foto. */
+.cart-item-image-empty { display: grid; place-items: center; width: 4.5rem; height: 5.5rem; background: #e9e8e1; color: #a9a8a1; }
+.cart-item-image-empty svg { width: 1.2rem; height: 1.2rem; }
+
+/* Permite apilar "Reintentar" y "Volver" en las páginas de resultado. */
+.checkout-actions { gap: .5rem; }
+
+/* Insignia discreta del modo mock: evita confundir datos de ejemplo con reales. */
+.data-mode-badge { position: fixed; z-index: 40; right: .75rem; bottom: .75rem; padding: .3rem .6rem; border: 1px solid #b9c8b1; background: #f8f7f3; color: #596d51; font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; box-shadow: 0 .4rem 1rem #24231f1a; }
