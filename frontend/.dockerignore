@@ -11,5 +11,4 @@ node_modules
 # VCS y ruido de IDE/sandbox
 .git
 .gitignore
-.vercel
 .v0*

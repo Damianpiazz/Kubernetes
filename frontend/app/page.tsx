@@ -3,7 +3,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { apiFetch, type CategoryDto, type Page, type ProductDto } from '@/lib/api'
+import {
+  ApiError,
+  createOrder,
+  createPayment,
+  hasToken,
+  login,
+  rememberPendingOrder,
+  register,
+  sessionEmail,
+} from '@/lib/api'
+import { apiFetch, productImageSrc, type CategoryDto, type Page, type ProductDto } from '@/lib/api'
 import {
   ArrowRight,
   ChevronDown,
@@ -63,6 +73,12 @@ export default function Page() {
   const [liked, setLiked] = useState<number[]>([])
   const [page, setPage] = useState(0)
   const [catalog, setCatalog] = useState<Product[]>(mockProducts)
+  const [authBusy, setAuthBusy] = useState(false)
+  const [authError, setAuthError] = useState<string | null>(null)
+  const [checkoutBusy, setCheckoutBusy] = useState(false)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
+  // Si el usuario intentó comprar sin sesión, al loguearse retomamos el checkout.
+  const [resumeCheckout, setResumeCheckout] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -84,7 +100,7 @@ export default function Page() {
             (product.categoryId != null ? categoryNames.get(product.categoryId) : undefined) ??
             'Sin categoría',
           price: Number(product.price),
-          image: product.imageUrl || mockProducts[0].image,
+          image: productImageSrc(product) ?? mockProducts[0].image,
           color: '',
         }))
         if (loaded.length > 0) setCatalog(loaded)
@@ -124,6 +140,70 @@ export default function Page() {
     return next
   })
 
+  const errorText = (error: unknown) =>
+    error instanceof ApiError ? error.message : 'No pudimos procesar la operación. Probá de nuevo.'
+
+  /** Submit del panel de cuenta: login o registro y, si venía de comprar, sigue el checkout. */
+  async function handleAccountSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    const email = String(form.get('email') ?? '').trim()
+    const password = String(form.get('password') ?? '')
+    const username = String(form.get('username') ?? '').trim()
+
+    setAuthBusy(true)
+    setAuthError(null)
+    try {
+      if (accountView === 'signup') await register({ email, username, password })
+      else await login(email, password)
+      setAccountOpen(false)
+      setAccountView('welcome')
+      if (resumeCheckout) {
+        setResumeCheckout(false)
+        void handleCheckout()
+      }
+    } catch (error) {
+      setAuthError(errorText(error))
+    } finally {
+      setAuthBusy(false)
+    }
+  }
+
+  /**
+   * Flujo de compra: orden → preferencia de Mercado Pago → redirección al
+   * Checkout Pro. El estado final lo resuelve el webhook contra payment-service.
+   */
+  async function handleCheckout() {
+    if (cartItems.length === 0 || checkoutBusy) return
+
+    const payerEmail = sessionEmail()
+    if (!hasToken() || !payerEmail) {
+      setCheckoutError(null)
+      setResumeCheckout(true)
+      setAccountView('login')
+      setAccountOpen(true)
+      return
+    }
+
+    setCheckoutBusy(true)
+    setCheckoutError(null)
+    try {
+      const order = await createOrder(
+        cartItems.map((product) => ({ productId: product.id, quantity: cart[product.id] })),
+      )
+      const payment = await createPayment(order.id, payerEmail)
+      // Lo guardamos por si Mercado Pago no devuelve el external_reference.
+      rememberPendingOrder(order.id)
+      if (!payment.checkoutUrl) {
+        throw new Error('Mercado Pago no devolvió la URL de pago.')
+      }
+      window.location.href = payment.checkoutUrl
+    } catch (error) {
+      setCheckoutError(errorText(error))
+      setCheckoutBusy(false)
+    }
+  }
+
   return (
     <main className="store-shell">
       <header className="site-header">
@@ -154,9 +234,9 @@ export default function Page() {
 
       {searchOpen && <div className="utility-overlay" onClick={() => setSearchOpen(false)}><section className="utility-panel search-panel" onClick={(event) => event.stopPropagation()}><div className="utility-header"><div><p className="eyebrow">encontrá tu próximo favorito</p><h2>¿Qué estás buscando?</h2></div><Button variant="ghost" size="icon" onClick={() => setSearchOpen(false)} aria-label="Cerrar búsqueda"><X /></Button></div><label className="search-field"><Search /><input autoFocus placeholder="Buscar productos, categorías..." aria-label="Buscar productos" /><span>⌘ K</span></label><div className="search-suggestions"><p>Podés probar con</p><button onClick={() => setSearchOpen(false)}>indumentaria</button><button onClick={() => setSearchOpen(false)}>hogar</button><button onClick={() => setSearchOpen(false)}>accesorios</button></div></section></div>}
 
-      {accountOpen && <div className="utility-overlay" onClick={() => setAccountOpen(false)}><section className="utility-panel account-panel" onClick={(event) => event.stopPropagation()}><div className="utility-header"><div><p className="eyebrow">tu espacio personal</p><h2>{accountView === 'welcome' ? 'Mi cuenta' : accountView === 'login' ? 'Ingresar' : 'Crear cuenta'}</h2></div><Button variant="ghost" size="icon" onClick={() => setAccountOpen(false)} aria-label="Cerrar cuenta"><X /></Button></div>{accountView === 'welcome' ? <div className="account-content"><div className="account-icon"><UserRound /></div><h3>Todo en un solo lugar</h3><p>Guardá tus favoritos y seguí tus pedidos desde tu cuenta.</p><Button size="lg" onClick={() => setAccountView('login')}>Ingresar <ArrowRight data-icon="inline-end" /></Button><button className="account-link" onClick={() => setAccountView('signup')}>Crear una cuenta</button></div> : <form className="account-form" onSubmit={(event) => event.preventDefault()}>{accountView === 'signup' && <label>Nombre<input required placeholder="Tu nombre" /></label>}<label>Email<input required type="email" placeholder="tu@email.com" /></label><label>Contraseña<input required type="password" placeholder="Mínimo 8 caracteres" /></label>{accountView === 'login' && <button className="forgot-link" type="button">¿Olvidaste tu contraseña?</button>}<Button size="lg" type="submit">{accountView === 'login' ? 'Ingresar' : 'Crear cuenta'} <ArrowRight data-icon="inline-end" /></Button><button className="account-link" type="button" onClick={() => setAccountView(accountView === 'login' ? 'signup' : 'login')}>{accountView === 'login' ? '¿No tenés cuenta? Crear una' : 'Ya tengo una cuenta'}</button></form>}</section></div>}
+      {accountOpen && <div className="utility-overlay" onClick={() => setAccountOpen(false)}><section className="utility-panel account-panel" onClick={(event) => event.stopPropagation()}><div className="utility-header"><div><p className="eyebrow">tu espacio personal</p><h2>{accountView === 'welcome' ? 'Mi cuenta' : accountView === 'login' ? 'Ingresar' : 'Crear cuenta'}</h2></div><Button variant="ghost" size="icon" onClick={() => setAccountOpen(false)} aria-label="Cerrar cuenta"><X /></Button></div>{accountView === 'welcome' ? <div className="account-content"><div className="account-icon"><UserRound /></div><h3>Todo en un solo lugar</h3><p>Guardá tus favoritos y seguí tus pedidos desde tu cuenta.</p><Button size="lg" onClick={() => setAccountView('login')}>Ingresar <ArrowRight data-icon="inline-end" /></Button><button className="account-link" onClick={() => setAccountView('signup')}>Crear una cuenta</button></div> : <form className="account-form" onSubmit={handleAccountSubmit}>{accountView === 'signup' && <label>Nombre<input name="username" required minLength={3} maxLength={30} placeholder="Tu nombre" autoComplete="username" /></label>}<label>Email<input name="email" required type="email" placeholder="tu@email.com" autoComplete="email" /></label><label>Contraseña<input name="password" required type="password" minLength={accountView === 'signup' ? 8 : undefined} placeholder="Mínimo 8 caracteres" autoComplete={accountView === 'signup' ? 'new-password' : 'current-password'} /></label>{accountView === 'login' && <button className="forgot-link" type="button">¿Olvidaste tu contraseña?</button>}{authError && <p className="checkout-notice">{authError}</p>}<Button size="lg" type="submit" disabled={authBusy}>{authBusy ? 'Un momento…' : accountView === 'login' ? 'Ingresar' : 'Crear cuenta'} <ArrowRight data-icon="inline-end" /></Button><button className="account-link" type="button" onClick={() => { setAuthError(null); setAccountView(accountView === 'login' ? 'signup' : 'login') }}>{accountView === 'login' ? '¿No tenés cuenta? Crear una' : 'Ya tengo una cuenta'}</button></form>}</section></div>}
 
-      {cartOpen && <div className="cart-overlay" onClick={() => setCartOpen(false)}><aside className="cart-drawer" onClick={(event) => event.stopPropagation()}><div className="drawer-header"><div><p className="eyebrow">tu selección</p><h2>Carrito <span>({cartCount})</span></h2></div><Button variant="ghost" size="icon" onClick={() => setCartOpen(false)} aria-label="Cerrar carrito"><X /></Button></div>{cartItems.length ? <><div className="cart-items">{cartItems.map((product) => <div className="cart-item" key={product.id}><img src={product.image} alt="" /><div className="cart-item-copy"><h3>{product.name}</h3><p>{money(product.price)}</p><div className="quantity"><button onClick={() => removeFromCart(product.id)} aria-label="Quitar una unidad"><Minus /></button><span>{cart[product.id]}</span><button onClick={() => addToCart(product.id)} aria-label="Agregar una unidad"><Plus /></button></div></div><strong>{money(product.price * cart[product.id])}</strong></div>)}</div><div className="cart-summary"><div><span>Subtotal</span><strong>{money(cartTotal)}</strong></div><p>Envío calculado al finalizar la compra.</p><Button size="lg" className="checkout-button" onClick={() => setCartOpen(false)}>Finalizar compra <ArrowRight data-icon="inline-end" /></Button></div></> : <div className="empty-cart"><ShoppingBag /><h3>Tu carrito está vacío</h3><p>Sumá algo lindo para empezar.</p></div>}</aside></div>}
+      {cartOpen && <div className="cart-overlay" onClick={() => setCartOpen(false)}><aside className="cart-drawer" onClick={(event) => event.stopPropagation()}><div className="drawer-header"><div><p className="eyebrow">tu selección</p><h2>Carrito <span>({cartCount})</span></h2></div><Button variant="ghost" size="icon" onClick={() => setCartOpen(false)} aria-label="Cerrar carrito"><X /></Button></div>{cartItems.length ? <><div className="cart-items">{cartItems.map((product) => <div className="cart-item" key={product.id}><img src={product.image} alt="" /><div className="cart-item-copy"><h3>{product.name}</h3><p>{money(product.price)}</p><div className="quantity"><button onClick={() => removeFromCart(product.id)} aria-label="Quitar una unidad"><Minus /></button><span>{cart[product.id]}</span><button onClick={() => addToCart(product.id)} aria-label="Agregar una unidad"><Plus /></button></div></div><strong>{money(product.price * cart[product.id])}</strong></div>)}</div><div className="cart-summary"><div><span>Subtotal</span><strong>{money(cartTotal)}</strong></div><p>Envío calculado al finalizar la compra.</p>{checkoutError && <p className="checkout-notice">{checkoutError}</p>}<Button size="lg" className="checkout-button" disabled={checkoutBusy} onClick={() => { void handleCheckout() }}>{checkoutBusy ? 'Te llevamos al pago…' : 'Finalizar compra'} <ArrowRight data-icon="inline-end" /></Button></div></> : <div className="empty-cart"><ShoppingBag /><h3>Tu carrito está vacío</h3><p>Sumá algo lindo para empezar.</p></div>}</aside></div>}
     </main>
   )
 }

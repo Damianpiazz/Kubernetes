@@ -274,6 +274,24 @@ footer > div:not(:first-child) { display: flex; flex-direction: column; gap: .7r
 .empty-cart svg { width: 2rem; height: 2rem; color: #93aa8a; }
 .empty-cart h3 { margin: 1rem 0 .35rem; font-family: Georgia, serif; font-size: 1.6rem; font-weight: 400; }
 .empty-cart p { margin: 0; color: #89877f; font-size: .85rem; }
+
+/* --- Retorno del checkout (back_urls de Mercado Pago) -------------------- */
+.checkout-surface { align-items: center; padding-top: 4rem; }
+.checkout-result { display: flex; flex-direction: column; align-items: center; gap: .9rem; padding: 2rem 2rem 2.5rem; text-align: center; }
+.checkout-badge { display: grid; place-items: center; width: 3.5rem; height: 3.5rem; border: 1px solid currentColor; border-radius: 50%; }
+.checkout-badge svg { width: 1.6rem; height: 1.6rem; }
+.checkout-copy { max-width: 24rem; margin: 0; color: #77766f; font-size: .9rem; line-height: 1.6; }
+.checkout-meta { display: grid; gap: .6rem; width: 100%; margin: 0; padding: 1rem 1.25rem; background: #efeee8; text-align: left; }
+.checkout-meta > div { display: flex; justify-content: space-between; gap: 1rem; font-size: .8rem; }
+.checkout-meta dt { color: #89877f; }
+.checkout-meta dd { margin: 0; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.checkout-hint { display: flex; align-items: center; justify-content: center; gap: .4rem; margin: 0; color: #89877f; font-size: .78rem; }
+.checkout-hint svg { width: .9rem; height: .9rem; flex: none; }
+.checkout-actions { display: flex; width: 100%; margin-top: .5rem; }
+.checkout-notice { margin: 0 0 .8rem; padding: .6rem .75rem; background: #f6e9e7; border: 1px solid #d9b4ae; color: #8d4239; font-size: .78rem; line-height: 1.5; }
+.checkout-hint.is-notice { align-items: flex-start; text-align: left; }
+.spin { animation: checkout-spin 1s linear infinite; }
+@keyframes checkout-spin { to { transform: rotate(360deg); } }
 @media (max-width: 800px) {
   .site-header { gap: .8rem; }
   .mobile-menu { display: inline-flex; }

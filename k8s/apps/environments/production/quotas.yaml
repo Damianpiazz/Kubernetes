@@ -1,8 +1,9 @@
 # Límites de agregado SOLO en producción (namespace latiendita). En local no
 # aplica: ahí el tier de datos comparte namespace y entraría en conflicto.
 #
-# Base: 6 servicios x 2 réplicas = 12 pods (3 CPU / 3 Gi de pedidos reales) con
-# holgura para el maxSurge de los rolling updates (+6 pods durante un deploy).
+# Base: 7 servicios x 2 réplicas = 14 pods (3.2 CPU / 3.25 Gi de pedidos
+# reales: 6 servicios Java + frontend) con holgura para el maxSurge de los
+# rolling updates (+7 pods durante un deploy → 21 < 30).
 # Si escalás réplicas o metés HPA: ampliar ANTES del deploy. Un quota
 # alcanzado deja los pods en Forbidden (error claro, pero bloquea el rollout).
 apiVersion: v1
@@ -20,7 +21,7 @@ spec:
     limits.memory: 8Gi
 ---
 # Red de seguridad: todo container nuevo sin `resources` hereda estos valores
-# (hoy los 6 ya los traen explícitos; esto cubre el olvido futuro).
+# (hoy los 7 ya los traen explícitos; esto cubre el olvido futuro).
 apiVersion: v1
 kind: LimitRange
 metadata:

@@ -438,7 +438,9 @@ services:
       # el contenedor del frontend no necesita salir a la red backend.
       - frontend
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/"]
+      # 127.0.0.1 y no localhost: wget resuelve localhost a ::1 (IPv6) y el
+      # server de Next solo escucha en IPv4.
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/"]
       interval: 15s
       timeout: 3s
       retries: 5
