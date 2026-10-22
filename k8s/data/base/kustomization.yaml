@@ -11,3 +11,6 @@ resources:
   - postgres/payments-db/statefulset.yaml
   - kafka/statefulset.yaml
   - kafka/service.yaml
+  # Storage de imágenes (solo local): en producción es Azure Blob Storage.
+  - azurite/statefulset.yaml
+  - azurite/service.yaml

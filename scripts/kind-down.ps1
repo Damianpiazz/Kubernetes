@@ -14,7 +14,7 @@
       6. Limpia la build cache (solo con -Cache).
       7. Verifica que no quede nada y reporta el espacio recuperado.
 
-    ADVERTENCIA: los datos de las bases (Postgres/Kafka) viven en volúmenes
+    ADVERTENCIA: los datos de las bases (Postgres/Kafka/Azurite) viven en volúmenes
     dentro del nodo de kind. Borrar el clúster los destruye de forma permanente.
 
     Par nativo de scripts/kind-down.sh: mismos objetivos, mismas opciones,
@@ -324,7 +324,7 @@ Complete-Step ('{0} recurso(s) por limpiar' -f $resourceCount)
 # --- 3. Confirmación ---------------------------------------------------------
 Start-Step 3 $TotalSteps 'Confirmación'
 Write-Host ''
-Write-Warn 'Los volúmenes de las bases (Postgres/Kafka) viven DENTRO del nodo de kind.'
+Write-Warn 'Los volúmenes de las bases (Postgres/Kafka/Azurite) viven DENTRO del nodo de kind.'
 Write-Warn 'Borrar el clúster destruye esos datos de forma permanente e irreversible.'
 Write-Host ''
 

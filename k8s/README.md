@@ -12,7 +12,7 @@ k8s/
 │       └── production/                Clúster real: imágenes, réplicas, DB/Kafka externas, TLS
 │
 ├── data/                              Stack: tier de datos SOLO local (ns latiendita)
-│   └── base/                          5 × Postgres (StatefulSet) + Kafka. No va a producción.
+│   └── base/                          5 × Postgres + Kafka + Azurite (StatefulSet). No va a producción.
 │
 ├── observability/                     Stack: observabilidad (ns latiendita-observability)
 │   ├── base/                          Prometheus, Loki, Tempo, Grafana, Alloy, Alertmanager + RBAC + NetworkPolicy

@@ -42,7 +42,7 @@ propio namespace.
 |---|---|
 | `eureka-server` | En k8s no hay descubrimiento Spring Cloud: todos los servicios corren con `EUREKA_ENABLED=false` y el gateway apunta a URLs directas (`http://auth-service`, etc.). Eureka solo aplica a desarrollo local con Docker Compose. |
 | Frontend (SPA) | Next.js en `frontend/`, desplegado **en el clúster** como un servicio más (Deployment + Service en `apps/base/frontend/`, heredado por local y producción). En `compose.yaml` también hay servicio `frontend` (además de la red edge `frontend`). La URL de la API es build-ARG —Next la inlinea en el bundle del browser—, no config runtime. |
-| `data/base` en producción | Las bases de datos y Kafka en producción son servicios gestionados (ver §9). |
+| `data/base` en producción | Las bases de datos y Kafka son servicios gestionados y el storage de imágenes es Azure Blob Storage (ver §9). |
 
 ---
 
@@ -96,7 +96,7 @@ Dos namespaces a propósito:
 │   ├── apps/                         Stack 1: los 6 microservicios
 │   │   ├── base/
 │   │   └── environments/{local,production}
-│   ├── data/                         Stack 2: Postgres + Kafka (solo local)
+│   ├── data/                         Stack 2: Postgres + Kafka + Azurite (solo local)
 │   │   └── base/
 │   └── observability/                Stack 3: stack de observabilidad
 │       ├── base/
@@ -634,10 +634,10 @@ bash y PowerShell con exit 0. **No se validó** un `kind-up` completo ni un
 
 | # | Pendiente | Impacto |
 |---|---|---|
-| 1 | Todos los `CHANGE-ME` de producción (registry/tag, ingress class/host, endpoints de DB/Kafka, CORS) | No se puede aplicar el environment de producción tal como está |
+| 1 | Todos los `CHANGE-ME` de producción (registry/tag, ingress class/host, endpoints de DB/Kafka, endpoint/cuenta de storage, CORS) | No se puede aplicar el environment de producción tal como está |
 | 2 | **Sin CI/CD**: `.github/` está vacío | Builds, pruebas y deploys manuales |
 | 3 | `terraform/` vacío (solo `.gitkeep`) | La infraestructura del clúster no está codificada |
-| 4 | La SPA corre en el clúster, pero su imagen de producción se buildea **manualmente** (sin CI/CD) con el build-ARG del dominio, y Vercel sigue vigente hasta cortar el DNS | Deploy manual de la imagen del UI; una vez verificado el Ingress, dar de baja el proyecto de Vercel |
+| 4 | La SPA corre en el clúster, pero su imagen de producción se buildea **manualmente** (sin CI/CD) con el build-ARG del dominio | Deploy manual de la imagen del UI; automatizar el build/push cuando exista CI/CD |
 | 5 | El clúster kind no trae `metrics-server` | `kubectl top` no funciona hasta instalarlo |
 | 6 | Sin `HPA`; `PodDisruptionBudget` solo en producción | Escalado y presupuestos de interrupción manuales |
 | 7 | Observabilidad sin `StorageClass` declarada (solo un bloque comentado en el environment de producción) | Si el clúster no tiene StorageClass por defecto, los PVC quedan `Pending` |

@@ -30,7 +30,7 @@ Uso: scripts/kind-down.sh [opciones]
 Limpia el entorno local de La Tiendita sobre kind: borra el clúster, sus
 contenedores de nodo, su contexto de kubeconfig y las imágenes construidas.
 
-ADVERTENCIA: los datos de las bases (Postgres/Kafka) viven en volúmenes
+ADVERTENCIA: los datos de las bases (Postgres/Kafka/Azurite) viven en volúmenes
 dentro del nodo de kind. Borrar el clúster los destruye de forma permanente.
 
 Opciones:
@@ -313,7 +313,7 @@ done_step "$(printf '%d recurso(s) por limpiar' $(( CLUSTER_EXISTS + CONTEXT_EXI
 # --- 3. Confirmación ---------------------------------------------------------
 step "Confirmación"
 printf '\n'
-warn "Los volúmenes de las bases (Postgres/Kafka) viven DENTRO del nodo de kind."
+warn "Los volúmenes de las bases (Postgres/Kafka/Azurite) viven DENTRO del nodo de kind."
 warn "Borrar el clúster destruye esos datos de forma permanente e irreversible."
 printf '\n'
 

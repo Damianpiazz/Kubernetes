@@ -240,7 +240,7 @@ contexto huérfano en kubeconfig, volúmenes sin uso. **Ningún paso es reversib
 | 4 | `docker system prune -a --volumes` | Contenedores detenidos, imágenes no referenciadas, redes sin uso, build cache y volúmenes anónimos |
 | 5 | `docker system df` | Verificación: todo en `0B`. `docker volume ls` y `kind get clusters` deben venir vacíos |
 
-> **Qué se pierde**: los datos locales de Postgres/Kafka viven en los volúmenes
+> **Qué se pierde**: los datos locales de Postgres/Kafka/Azurite viven en los volúmenes
 > `la-tiendita_*` (compose) y dentro del propio nodo de kind (k8s); los dos pasos
 > 1 y 3 los destruyen. `docker volume prune -a` también borra volúmenes de
 > **otros proyectos** de la máquina.

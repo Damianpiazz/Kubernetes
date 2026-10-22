@@ -7,6 +7,7 @@
 #   payment → order                            :8080
 #   apps    → Postgres (auth/users/products/orders/payments-db) :5432
 #   apps    → kafka                            :9092
+#   product-service → azurite                  :10000  [storage de imágenes]
 #   apps    → alloy (ns latiendita-observability)                :4318   [OTLP]
 #   prometheus (ns latiendita-observability) → pods de apps     :8080
 #                                             [kubernetes_sd role=endpoints:
@@ -89,9 +90,9 @@ spec:
         - port: 8080
           protocol: TCP
 ---
-# Tier de datos local: solo los pods de las apps pueden hablar con Postgres y
-# Kafka. En producción este tráfico sale del clúster (servicios gestionados) y
-# la política queda inerte.
+# Tier de datos local: solo los pods de las apps pueden hablar con Postgres,
+# Kafka y Azurite. En producción este tráfico sale del clúster (servicios
+# gestionados) y la política queda inerte.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -110,6 +111,7 @@ spec:
           - orders-db
           - payments-db
           - kafka
+          - azurite
   policyTypes:
     - Ingress
   ingress:
@@ -129,6 +131,15 @@ spec:
         - port: 5432
           protocol: TCP
         - port: 9092
+          protocol: TCP
+    # product-service → Azurite :10000 (storage de imágenes). Regla propia:
+    # solo product-service habla con el storage, no el resto de las apps.
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: product-service
+      ports:
+        - port: 10000
           protocol: TCP
 ---
 # Scrape de Prometheus: el kubernetes_sd role=endpoints apunta a las POD IPs

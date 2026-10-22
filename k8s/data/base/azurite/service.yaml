@@ -1,0 +1,17 @@
+# Headless como kafka/service.yaml y los Services de Postgres: el StatefulSet
+# resuelve por nombre estable (azurite:10000) dentro del namespace latiendita.
+apiVersion: v1
+kind: Service
+metadata:
+  name: azurite
+  labels:
+    app.kubernetes.io/name: azurite
+    app.kubernetes.io/part-of: la-tiendita
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: azurite
+  ports:
+    - name: blob
+      port: 10000
+      targetPort: blob

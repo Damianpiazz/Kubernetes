@@ -249,7 +249,7 @@ destructivo y no tiene vuelta atrás.**
    opcional: solo se usa para limpiar el contexto).
 2. **Inventario** — lista exactamente qué se va a borrar: clúster, contenedores
    de nodo, contexto de kubeconfig e imágenes, con el tamaño total.
-3. **Confirmación** — avisa que los volúmenes de Postgres/Kafka viven **dentro
+3. **Confirmación** — avisa que los volúmenes de Postgres/Kafka/Azurite viven **dentro
    del nodo de kind** y se destruyen para siempre, y pide `s`. Con `-DryRun`
    termina acá sin tocar nada; con `-Yes` no pregunta.
 4. **Clúster kind** — `kind delete cluster`, los contenedores de nodo que
