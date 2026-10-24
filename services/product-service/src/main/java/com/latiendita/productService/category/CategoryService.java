@@ -4,6 +4,8 @@ import com.latiendita.productService.category.dto.CategoryDto;
 import com.latiendita.productService.category.dto.CategoryMapper;
 import com.latiendita.productService.exception.CategoryNotFoundException;
 import com.latiendita.productService.exception.DuplicateCategoryException;
+import com.latiendita.productService.sort.SortValidator;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -16,6 +18,12 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional
 public class CategoryService {
+
+    /**
+     * Propiedades de {@link CategoryEntity} que se pueden usar en `sort`. Cualquier
+     * otra (o un formato como `-id`) se rechaza con 400 antes de llegar a JPA.
+     */
+    private static final Set<String> SORTABLE_PROPERTIES = Set.of("id", "name", "description");
 
     private final CategoryRepository categoryRepository;
 
@@ -50,6 +58,7 @@ public class CategoryService {
 
     @Transactional(readOnly = true)
     public Page<CategoryDto> findAll(Pageable pageable) {
+        SortValidator.validate(pageable.getSort(), SORTABLE_PROPERTIES);
         return categoryRepository.findAll(pageable).map(CategoryMapper::toDto);
     }
 
@@ -61,8 +70,10 @@ public class CategoryService {
     @Transactional(readOnly = true)
     public Page<CategoryDto> findAllPagingAndSorting(int pageNo, int pageSize, String sortBy) {
         String property = "categoryId".equals(sortBy) ? "id" : sortBy;
+        Sort sort = Sort.by(property);
+        SortValidator.validate(sort, SORTABLE_PROPERTIES);
         return categoryRepository
-                .findAll(PageRequest.of(pageNo, pageSize, Sort.by(property)))
+                .findAll(PageRequest.of(pageNo, pageSize, sort))
                 .map(CategoryMapper::toDto);
     }
 

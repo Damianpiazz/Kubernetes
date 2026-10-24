@@ -50,8 +50,8 @@ public class ProductController {
      * GET /api/products?q=&categoryId=&page=&size=&sort=
      *
      * Los filtros son opcionales y combinables: sin parámetros se comporta igual
-     * que antes. `sort` sólo acepta propiedades de la entidad, porque Spring
-     * Data responde 500 ante una propiedad desconocida.
+     * que antes. `sort` sólo acepta `propiedad` o `propiedad,asc|desc` sobre
+     * propiedades de la entidad; cualquier otro formato responde 400.
      */
     @GetMapping
     public Page<ProductDto> findAll(

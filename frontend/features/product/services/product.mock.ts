@@ -58,10 +58,14 @@ export const productMockImpl: ProductApi = {
   },
 }
 
-/** Reproduce el `sort` de Spring Data: prefijo `-` = descendente. */
+/**
+ * Reproduce el `sort` de Spring Data: `propiedad` (ascendente por default) o
+ * `propiedad,asc|desc`. El prefijo `-` no existe en el formato del backend.
+ */
 function applySort(items: MockProduct[], sort: ProductSort): MockProduct[] {
-  const descending = sort.startsWith('-')
-  const key = (descending ? sort.slice(1) : sort) as keyof MockProduct
+  const [property, direction] = sort.split(',')
+  const descending = (direction ?? 'asc').toLowerCase() === 'desc'
+  const key = property as keyof MockProduct
 
   const sorted = [...items].sort((left, right) => {
     const a = left[key]

@@ -11,6 +11,7 @@ import com.latiendita.productService.category.CategoryEntity;
 import com.latiendita.productService.category.CategoryRepository;
 import com.latiendita.productService.exception.CategoryNotFoundException;
 import com.latiendita.productService.exception.DuplicateSkuException;
+import com.latiendita.productService.exception.InvalidSortException;
 import com.latiendita.productService.exception.ProductNotFoundException;
 import com.latiendita.productService.product.dto.ProductDto;
 import java.math.BigDecimal;
@@ -21,6 +22,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 @ExtendWith(MockitoExtension.class)
 class ProductServiceTest {
@@ -148,5 +151,39 @@ class ProductServiceTest {
                 .thenReturn(org.springframework.data.domain.Page.empty());
 
         assertThat(productService.findAll(PageRequest.of(0, 2))).isEmpty();
+    }
+
+    @Test
+    void shouldAcceptSpringSortFormat() {
+        PageRequest pageable = PageRequest.of(0, 8,
+                Sort.by(new Sort.Order(Sort.Direction.DESC, "id")));
+        when(productRepository.findAll(pageable))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+
+        assertThat(productService.findAll(pageable)).isEmpty();
+    }
+
+    @Test
+    void shouldRejectInvalidSortBeforeQuerying() {
+        PageRequest minusPrefix = PageRequest.of(0, 8,
+                Sort.by(new Sort.Order(Sort.Direction.ASC, "-id")));
+
+        assertThatThrownBy(() -> productService.findAll(minusPrefix))
+                .isInstanceOf(InvalidSortException.class)
+                .hasMessageContaining("Formato de sort inválido");
+
+        PageRequest mongoStyle = PageRequest.of(0, 8,
+                Sort.by(new Sort.Order(Sort.Direction.ASC, "-id:1")));
+
+        assertThatThrownBy(() -> productService.search(null, null, mongoStyle))
+                .isInstanceOf(InvalidSortException.class);
+
+        PageRequest unknownProperty = PageRequest.of(0, 8, Sort.by("noExiste"));
+
+        assertThatThrownBy(() -> productService.search(null, null, unknownProperty))
+                .isInstanceOf(InvalidSortException.class)
+                .hasMessageContaining("no soportada");
+
+        verify(productRepository, never()).findAll(any(Pageable.class));
     }
 }

@@ -6,6 +6,8 @@ import com.latiendita.productService.exception.DuplicateSkuException;
 import com.latiendita.productService.exception.ProductNotFoundException;
 import com.latiendita.productService.product.dto.ProductDto;
 import com.latiendita.productService.product.dto.ProductMapper;
+import com.latiendita.productService.sort.SortValidator;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -16,6 +18,13 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional
 public class ProductService {
+
+    /**
+     * Propiedades de {@link ProductEntity} que se pueden usar en `sort`. Cualquier
+     * otra (o un formato como `-id`) se rechaza con 400 antes de llegar a JPA.
+     */
+    private static final Set<String> SORTABLE_PROPERTIES =
+            Set.of("id", "title", "imageUrl", "sku", "price", "quantity", "categoryId");
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
@@ -61,6 +70,7 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public Page<ProductDto> findAll(Pageable pageable) {
+        SortValidator.validate(pageable.getSort(), SORTABLE_PROPERTIES);
         return productRepository.findAll(pageable).map(ProductMapper::toDto);
     }
 
@@ -72,6 +82,7 @@ public class ProductService {
      */
     @Transactional(readOnly = true)
     public Page<ProductDto> search(String q, Long categoryId, Pageable pageable) {
+        SortValidator.validate(pageable.getSort(), SORTABLE_PROPERTIES);
         String term = q == null || q.isBlank() ? null : q.trim();
         boolean byCategory = categoryId != null;
 

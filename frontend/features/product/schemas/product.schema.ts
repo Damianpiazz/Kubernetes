@@ -59,28 +59,36 @@ export const categoryPageSchema = pageSchema(categorySchema)
 /**
  * Ordenamientos que el backend acepta en `sort`.
  *
+ * Formato Spring Data: `propiedad` (ascendente) o `propiedad,asc|desc`. No se
+ * usa el prefijo `-` de descendente porque Spring Data lo trata como parte del
+ * nombre de la propiedad y responde 500 (`Sort expression '-id: ASC' must only
+ * contain property references…`).
+ *
  * Spring Data resuelve el sort por nombre de propiedad de la entidad: una
  * propiedad inválida responde 500, no 400. Por eso la lista está acotada acá y
  * no se expone libre al usuario.
+ *
+ * Ojo con la coma: `URLSearchParams` la encodea como `%2C` y el servlet la
+ * decodifica antes de repartir el parámetro, así que llega igual a Spring.
  */
 export const PRODUCT_SORTS = [
-  { value: '-id', label: 'Más recientes' },
+  { value: 'id,desc', label: 'Más recientes' },
   { value: 'sku', label: 'SKU (A–Z)' },
   { value: 'title', label: 'Nombre (A–Z)' },
   { value: 'price', label: 'Precio (menor a mayor)' },
-  { value: '-price', label: 'Precio (mayor a menor)' },
+  { value: 'price,desc', label: 'Precio (mayor a menor)' },
 ] as const
 
 export const productSortSchema = z.enum([
-  '-id',
+  'id,desc',
   'sku',
-  '-sku',
+  'sku,desc',
   'title',
-  '-title',
+  'title,desc',
   'price',
-  '-price',
+  'price,desc',
   'quantity',
-  '-quantity',
+  'quantity,desc',
 ])
 
 export type ProductSort = z.infer<typeof productSortSchema>
@@ -89,7 +97,7 @@ export type ProductSort = z.infer<typeof productSortSchema>
 export const catalogQuerySchema = z.object({
   page: z.number().int().min(0).default(0),
   size: z.number().int().min(1).max(100).default(8),
-  sort: productSortSchema.default('-id'),
+  sort: productSortSchema.default('id,desc'),
   /** Búsqueda por texto en el título (implementada en el backend). */
   q: z.string().trim().min(1).optional(),
   categoryId: z.number().int().optional(),

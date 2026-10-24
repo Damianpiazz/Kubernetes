@@ -131,6 +131,44 @@ class ProductApiIntegrationTest {
     }
 
     @Test
+    void shouldAcceptSpringSortFormatWith200() throws Exception {
+        productRepository.saveAll(List.of(
+                product("SKU-1", "Prod1"),
+                product("SKU-2", "Prod2")));
+
+        mockMvc.perform(get("/api/products").param("page", "0").param("size", "8")
+                        .param("sort", "id,desc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(2));
+    }
+
+    @Test
+    void shouldRejectMinusPrefixSortWith400() throws Exception {
+        mockMvc.perform(get("/api/products").param("page", "0").param("size", "8")
+                        .param("sort", "-id"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Sort inválido"))
+                .andExpect(jsonPath("$.detail", containsString("Formato de sort inválido")));
+    }
+
+    @Test
+    void shouldRejectMongoStyleSortWith400() throws Exception {
+        mockMvc.perform(get("/api/products").param("page", "0").param("size", "8")
+                        .param("sort", "-id:1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail", containsString("Formato de sort inválido")));
+    }
+
+    @Test
+    void shouldRejectUnknownSortPropertyWith400() throws Exception {
+        mockMvc.perform(get("/api/products").param("page", "0").param("size", "8")
+                        .param("sort", "noExiste"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Sort inválido"))
+                .andExpect(jsonPath("$.detail", containsString("no soportada")));
+    }
+
+    @Test
     void shouldUpdateProductViaPutWithPathVariable() throws Exception {
         ProductEntity saved = productRepository.save(product("SKU-1", "Viejo"));
 

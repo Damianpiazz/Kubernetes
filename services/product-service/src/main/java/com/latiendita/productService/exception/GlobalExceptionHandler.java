@@ -2,6 +2,7 @@ package com.latiendita.productService.exception;
 
 import java.util.stream.Collectors;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -30,6 +31,21 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DuplicateCategoryException.class)
     public ProblemDetail onDuplicateCategory(DuplicateCategoryException ex) {
         return problem(HttpStatus.CONFLICT, "Recurso duplicado", ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidSortException.class)
+    public ProblemDetail onInvalidSort(InvalidSortException ex) {
+        return problem(HttpStatus.BAD_REQUEST, "Sort inválido", ex.getMessage());
+    }
+
+    /**
+     * Red de seguridad: todo lo que Spring Data considera "uso inválido de la
+     * API" es un problema del request, no del servidor, así que responde 400 y
+     * nunca 500.
+     */
+    @ExceptionHandler(InvalidDataAccessApiUsageException.class)
+    public ProblemDetail onInvalidApiUsage(InvalidDataAccessApiUsageException ex) {
+        return problem(HttpStatus.BAD_REQUEST, "Solicitud inválida", ex.getMessage());
     }
 
     @ExceptionHandler(OptimisticLockingFailureException.class)
