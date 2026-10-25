@@ -194,7 +194,7 @@ $Context        = 'kind-{0}' -f $ClusterName
 $TotalSteps     = 8
 
 $Apps          = @('auth-service', 'user-service', 'product-service', 'order-service', 'payment-service', 'gateway', 'frontend')
-$StatefulSets  = @('auth-db', 'users-db', 'products-db', 'orders-db', 'payments-db', 'kafka')
+$StatefulSets  = @('auth-db', 'users-db', 'products-db', 'orders-db', 'payments-db', 'kafka', 'azurite')
 
 # Contexto de build por servicio: los microservicios viven en services/<nombre>
 # y el frontend en frontend/ (raíz del repo).

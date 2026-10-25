@@ -57,3 +57,31 @@ secretGenerator:
 
 generatorOptions:
   disableNameSuffixHash: true
+
+patches:
+  # El seed de product-service sube las fotos de catálogo a Azurite en el
+  # arranque (best-effort, sin retry): si Azurite todavía no acepta
+  # conexiones, las imágenes quedan sin subir hasta el próximo restart del
+  # pod. El init container ya espera products-db por el mismo motivo; acá se
+  # agrega la espera de Azurite. Strategic merge por nombre (wait-for-deps),
+  # el resto del init container (image, resources, securityContext) se
+  # mantiene de k8s/apps/base. Solo local: en producción no existe Azurite
+  # (el storage es Azure Blob gestionado), por eso va en el overlay y no en
+  # el base.
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: product-service
+      spec:
+        template:
+          spec:
+            initContainers:
+              - name: wait-for-deps
+                command:
+                  - sh
+                  - -c
+                  - |
+                    until nc -z products-db 5432; do echo "waiting for products-db:5432"; sleep 2; done
+                    until nc -z azurite 10000; do echo "waiting for azurite:10000"; sleep 2; done
+                    echo "dependencies ready"

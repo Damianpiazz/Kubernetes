@@ -203,7 +203,7 @@ APPS=(auth-service user-service product-service order-service payment-service ga
 build_context() {
   if [[ "$1" == "frontend" ]]; then printf '%s' './frontend'; else printf '%s' "./services/$1"; fi
 }
-STATEFULSETS=(auth-db users-db products-db orders-db payments-db kafka)
+STATEFULSETS=(auth-db users-db products-db orders-db payments-db kafka azurite)
 
 [[ -d "$OVERLAY" ]] || fail "no existe $OVERLAY: correr desde la raíz del repo." 1
 

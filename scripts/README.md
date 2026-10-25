@@ -225,7 +225,7 @@ Levanta el entorno local completo en 8 pasos:
 4. **Imágenes** — build de los 7 servicios (embebido, no invoca a `build-images`) + `kind load`.
 5. **Manifests** — `kubectl apply` del environment local.
 6. **Infraestructura** — espera los StatefulSets (`auth-db`, `users-db`, `products-db`,
-   `orders-db`, `payments-db`, `kafka`).
+   `orders-db`, `payments-db`, `kafka`, `azurite`).
 7. **Servicios** — espera los Deployments (`auth-service`, `user-service`,
    `product-service`, `order-service`, `payment-service`, `gateway`, `frontend`).
 8. **Verificación** — todos los pods del namespace `latiendita` en `Running`/`Completed`.
