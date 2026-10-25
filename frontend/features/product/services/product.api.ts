@@ -36,7 +36,7 @@ export const productApiImpl: ProductApi = {
   },
 
   resolveImage(product: Product): string | null {
-    if (product.imageUrl) return product.imageUrl
+    if (product.imageUrl?.startsWith('http')) return product.imageUrl
     if (product.productId == null) return null
     return `${env.NEXT_PUBLIC_API_URL}/api/products/${product.productId}/image`
   },
