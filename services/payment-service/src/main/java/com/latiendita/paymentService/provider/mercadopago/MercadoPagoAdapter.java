@@ -38,36 +38,8 @@ public class MercadoPagoAdapter implements PaymentGateway {
                 request.externalReference());
 
         try {
-            List<PreferenceItemRequest> items = request.items().stream()
-                    .map(item -> PreferenceItemRequest.builder()
-                            .id(item.id())
-                            .title(item.title())
-                            .description(item.description())
-                            .quantity(item.quantity())
-                            .unitPrice(item.unitPrice())
-                            .build())
-                    .collect(Collectors.toList());
-
-            PreferenceRequest preferenceRequest = PreferenceRequest.builder()
-                    .items(items)
-                    .payer(PreferencePayerRequest.builder()
-                            .email(request.payerEmail())
-                            .build())
-                    .backUrls(PreferenceBackUrlsRequest.builder()
-                            .success(request.backUrlSuccess())
-                            .failure(request.backUrlFailure())
-                            .pending(request.backUrlPending())
-                            .build())
-                    .autoReturn("approved")
-                    .externalReference(request.externalReference())
-                    // Aparece en el resumen de la tarjeta del titular: baja las
-                    // desconocimientos/chargebacks. Sólo se envía si está configurado.
-                    .statementDescriptor(nullToNull(request.statementDescriptor()))
-                    .notificationUrl(request.notificationUrl())
-                    .build();
-
             com.mercadopago.resources.preference.Preference preference =
-                    new PreferenceClient().create(preferenceRequest);
+                    new PreferenceClient().create(buildPreferenceRequest(request));
 
             log.info("Preferencia creada. id={} initPoint={}",
                     preference.getId(), preference.getInitPoint());
@@ -85,6 +57,57 @@ public class MercadoPagoAdapter implements PaymentGateway {
                     request.externalReference(), ex.getMessage());
             throw new PaymentGatewayUnavailableException(ex);
         }
+    }
+
+    /**
+     * Construye la preferencia de Checkout Pro. Sólo construcción (sin llamada
+     * HTTP), para poder testearla sin tocar la API de Mercado Pago.
+     *
+     * <p>Dos decisiones que hacen a la integración válida según el checklist de
+     * calidad de Mercado Pago:</p>
+     * <ul>
+     *   <li>{@code currency_id} por ítem: sin él, la API usa la moneda por
+     *       defecto de la cuenta y el monto no cuadraría con el pedido si la
+     *       cuenta fuera de otra moneda.</li>
+     *   <li>{@code auto_return} sólo si hay {@code back_urls.success}: la API
+     *       rechaza la preferencia con 400 si viene {@code auto_return} sin URL
+     *       de éxito. Un campo vacío va como {@code null} (omitido por Gson).</li>
+     * </ul>
+     */
+    PreferenceRequest buildPreferenceRequest(GatewayPreferenceRequest request) {
+        String backUrlSuccess = nullToNull(request.backUrlSuccess());
+
+        List<PreferenceItemRequest> items = request.items().stream()
+                .map(item -> PreferenceItemRequest.builder()
+                        .id(item.id())
+                        .title(item.title())
+                        .description(item.description())
+                        .quantity(item.quantity())
+                        .unitPrice(item.unitPrice())
+                        .currencyId(nullToNull(request.currency()))
+                        .build())
+                .collect(Collectors.toList());
+
+        PreferenceRequest.PreferenceRequestBuilder builder = PreferenceRequest.builder()
+                .items(items)
+                .payer(PreferencePayerRequest.builder()
+                        .email(request.payerEmail())
+                        .build())
+                .backUrls(PreferenceBackUrlsRequest.builder()
+                        .success(backUrlSuccess)
+                        .failure(nullToNull(request.backUrlFailure()))
+                        .pending(nullToNull(request.backUrlPending()))
+                        .build())
+                .externalReference(request.externalReference())
+                // Aparece en el resumen de la tarjeta del titular: baja las
+                // desconocimientos/chargebacks. Sólo se envía si está configurado.
+                .statementDescriptor(nullToNull(request.statementDescriptor()))
+                .notificationUrl(nullToNull(request.notificationUrl()));
+
+        if (backUrlSuccess != null) {
+            builder.autoReturn("approved");
+        }
+        return builder.build();
     }
 
     @Override

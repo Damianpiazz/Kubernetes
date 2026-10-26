@@ -86,11 +86,12 @@ Frontend ──POST /api/payments──▶ payment-service ──PreferenceClien
 | `items[].title` | `productTitle` | `order-service` |
 | `items[].description` | `productTitle` | `order-service` no expone descripciones largas |
 | `items[].quantity` / `unit_price` | ítems del pedido | `order-service` |
+| `items[].currency_id` | `currency` del request | Moneda del pedido; vacío ⇒ omitido y MP usa la moneda de la cuenta |
 | `payer.email` | `payerEmail` del request | Frontend, del `email` del JWT |
 | `external_reference` | `orderNumber` | Único eslabón entre Mercado Pago y nuestro pago |
 | `back_urls.*` / `notification_url` | Configuración por entorno | `MERCADO_PAGO_*_URL` |
 | `statement_descriptor` | `MERCADO_PAGO_STATEMENT_DESCRIPTOR` | Resumen de la tarjeta del titular |
-| `auto_return` | `approved` | Fijo |
+| `auto_return` | `approved` | Condicional: sólo si `back_urls.success` está configurado (MP devuelve 400 sin ella) |
 
 Pendiente de sumar (mejoran el puntaje del *checklist de calidad*): `payer.last_name`
 (ya que `CreatePaymentRequest` sólo recibe el email) y `items.category_id` (no
