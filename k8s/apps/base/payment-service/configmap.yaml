@@ -16,7 +16,7 @@ data:
   # directamente (regla del repo); los valores reales se pisan en cada overlay
   # vía configMapGenerator (k8s/apps/environments/*/kustomization.yaml).
   # Mercado Pago rechaza localhost/127.0.0.1 tanto acá como en las back_urls.
-  MERCADO_PAGO_NOTIFICATION_URL: CHANGE-ME-tunel/api/webhooks/mercado-pago
+  MERCADO_PAGO_NOTIFICATION_URL: https://CHANGE-ME-tunel/api/webhooks/mercado-pago
   MERCADO_PAGO_BACK_URL_SUCCESS: https://CHANGE-ME.example.com/checkout/success
   MERCADO_PAGO_BACK_URL_FAILURE: https://CHANGE-ME.example.com/checkout/failure
   MERCADO_PAGO_BACK_URL_PENDING: https://CHANGE-ME.example.com/checkout/pending

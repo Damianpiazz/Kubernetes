@@ -322,8 +322,8 @@ USERS_DB_PASSWORD=changeme-users
 PRODUCTS_DB_PASSWORD=changeme-products
 ORDERS_DB_PASSWORD=changeme-orders
 PAYMENTS_DB_PASSWORD=changeme-payments
-MERCADO_PAGO_ACCESS_TOKEN=          # opcional
-MERCADO_PAGO_WEBHOOK_SECRET=        # opcional
+MERCADO_PAGO_ACCESS_TOKEN=          # vacío en local ⇒ 503 al crear pago; producción: obligatorio
+MERCADO_PAGO_WEBHOOK_SECRET=        # vacío ⇒ webhooks ignorados; producción: obligatorio
 ```
 
 - `scripts/kind-up.*` crea el `secrets.env` desde el `.example` **solo si no
@@ -336,7 +336,10 @@ MERCADO_PAGO_WEBHOOK_SECRET=        # opcional
   verifica faltantes y valores de plantilla (**exit 4**).
 - `scripts/deploy.*` extrae del manifiesto las claves que aparecen en
   `secretKeyRef` y valida que existan en el archivo: si falta alguna → **exit 5**;
-  si están definidas pero vacías (las de Mercado Pago) → solo aviso.
+  si están definidas pero vacías (las de Mercado Pago) → solo aviso. **En
+  producción el aviso no basta**: el overlay activa el perfil Spring `k8s`, y
+  `MercadoPagoSecretsValidator` revienta el arranque si el access token o el
+  webhook secret están vacíos.
 - Producción usa **el mismo patrón** con su propio archivo
   `k8s/apps/environments/production/secrets.env` (gitignored, plantilla
   `secrets.env.example` con `CHANGE-ME-*`; se crea con

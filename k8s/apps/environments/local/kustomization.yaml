@@ -45,10 +45,10 @@ configMapGenerator:
   - name: payment-service-config
     behavior: merge
     literals:
-      - MERCADO_PAGO_NOTIFICATION_URL=https://CHANGE-ME-tunel/api/webhooks/mercado-pago
-      - MERCADO_PAGO_BACK_URL_SUCCESS=https://CHANGE-ME-tunel/checkout/success
-      - MERCADO_PAGO_BACK_URL_FAILURE=https://CHANGE-ME-tunel/checkout/failure
-      - MERCADO_PAGO_BACK_URL_PENDING=https://CHANGE-ME-tunel/checkout/pending
+      - MERCADO_PAGO_NOTIFICATION_URL=https://9vc1hcck-8080.brs.devtunnels.ms/api/webhooks/mercado-pago
+      - MERCADO_PAGO_BACK_URL_SUCCESS=https://9vc1hcck-3000.brs.devtunnels.ms/checkout/success
+      - MERCADO_PAGO_BACK_URL_FAILURE=https://9vc1hcck-3000.brs.devtunnels.ms/checkout/failure
+      - MERCADO_PAGO_BACK_URL_PENDING=https://9vc1hcck-3000.brs.devtunnels.ms/checkout/pending
 
 secretGenerator:
   - name: latiendita-secrets

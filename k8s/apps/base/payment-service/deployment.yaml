@@ -86,18 +86,24 @@ spec:
                 secretKeyRef:
                   name: latiendita-secrets
                   key: PAYMENTS_DB_PASSWORD
+            # Sin optional: la clave DEBE existir en latiendita-secrets (mismo
+            # contrato que deploy.* → exit 5 si falta en secrets.env). El valor
+            # sí puede venir vacío en local (integración deshabilitada); en
+            # producción el perfil k8s activa MercadoPagoSecretsValidator y
+            # revienta el arranque si está vacío. Con optional: true, si la
+            # clave faltara, K8s la dejaría pasar y el pod entraría en
+            # CrashLoopBackOff (o arrancaría con pagos deshabilitados) en vez
+            # de un evento CreateContainerConfigError claro.
             - name: MERCADO_PAGO_ACCESS_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: latiendita-secrets
                   key: MERCADO_PAGO_ACCESS_TOKEN
-                  optional: true
             - name: MERCADO_PAGO_WEBHOOK_SECRET
               valueFrom:
                 secretKeyRef:
                   name: latiendita-secrets
                   key: MERCADO_PAGO_WEBHOOK_SECRET
-                  optional: true
           lifecycle:
             preStop:
               exec:
