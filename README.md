@@ -289,6 +289,7 @@ La tabla completa (incluidas las variables de Kubernetes) está en [docs/environ
 | [docs/microservicios/product.md](./docs/microservicios/product.md) | Catálogo, imágenes y seed |
 | [docs/microservicios/order.md](./docs/microservicios/order.md) | Pedidos y su máquina de estados |
 | [docs/microservicios/payment.md](./docs/microservicios/payment.md) | Pagos y webhook de Mercado Pago |
+| [docs/mercado-pago/mercado-pago.md](./docs/mercado-pago/mercado-pago.md) | Puertos, URLs públicas y túnel/exposición por entorno |
 | [docs/microservicios/gateway.md](./docs/microservicios/gateway.md) · [eureka-server.md](./docs/microservicios/eureka-server.md) | Ruteo, JWT, CORS, rate limiting y descubrimiento |
 | [docs/kubernetes/configuracion.md](./docs/kubernetes/configuracion.md) | Diseño del despliegue en k8s (§12 = pendientes de producción) |
 | [docs/kubernetes/comandos.md](./docs/kubernetes/comandos.md) · [red.md](./docs/kubernetes/red.md) | Comandos de rutina y diseño de red/NetworkPolicies |

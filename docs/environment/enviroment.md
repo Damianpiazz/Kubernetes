@@ -89,6 +89,9 @@ nuevos valores. Un único túnel sólo llega a un puerto: con un dominio propio 
 un reverse proxy (o con `--host-header=rewrite` de ngrok) se resuelve en uno
 solo.
 
+> Puertos, alternativa con VS Code (Remote Tunnels) y la tabla de métodos de
+> exposición están en [docs/mercado-pago/mercado-pago.md](../mercado-pago/mercado-pago.md).
+
 **Webhook secret**: se genera en *Tus integraciones → Webhooks → Configurar
 notificaciones → Guardar* de Mercado Pago y va en `MERCADO_PAGO_WEBHOOK_SECRET`.
 Sin él, `WebhookSignatureValidator` descarta toda notificación y el pago queda
@@ -119,8 +122,8 @@ Kustomize). En producción todos los valores `CHANGE-ME` deben reemplazarse
 | `PRODUCTS_DB_PASSWORD` | `SPRING_DATASOURCE_PASSWORD` en `product-service` | Password de la DB externa `products` |
 | `ORDERS_DB_PASSWORD` | `SPRING_DATASOURCE_PASSWORD` en `order-service` | Password de la DB externa `orders` |
 | `PAYMENTS_DB_PASSWORD` | `SPRING_DATASOURCE_PASSWORD` en `payment-service` | Password de la DB externa `payments` |
-| `MERCADO_PAGO_ACCESS_TOKEN` | `MERCADO_PAGO_ACCESS_TOKEN` en `payment-service` | Vacío ⇒ feature deshabilitada |
-| `MERCADO_PAGO_WEBHOOK_SECRET` | `MERCADO_PAGO_WEBHOOK_SECRET` en `payment-service` | Vacío ⇒ feature deshabilitada |
+| `MERCADO_PAGO_ACCESS_TOKEN` | `MERCADO_PAGO_ACCESS_TOKEN` en `payment-service` | Vacío ⇒ feature deshabilitada en local; en producción el validador del perfil `k8s` impide el arranque |
+| `MERCADO_PAGO_WEBHOOK_SECRET` | `MERCADO_PAGO_WEBHOOK_SECRET` en `payment-service` | Vacío ⇒ webhooks ignorados en local; en producción, obligatorio (mismo validador) |
 | `AZURE_STORAGE_KEY` | `AZURE_STORAGE_KEY` en `product-service` | Clave de cuenta del storage de imágenes (Azurite local / Azure Blob Storage en prod) |
 
 ### 2.2 Secretos de observabilidad (`k8s/observability/environments/<env>/secrets.env`)
@@ -172,6 +175,13 @@ No requieren configuración manual, pero es el valor por defecto en clúster:
 - **Grafana** (`k8s/observability/base/grafana/deployment.yaml`):
   `GF_USERS_ALLOW_SIGN_UP=false`, `GF_ANALYTICS_REPORTING_ENABLED=false`,
   `GF_ANALYTICS_CHECK_FOR_UPDATES=false`.
+
+### 2.5 URLs de Mercado Pago en Kubernetes
+
+Las cuatro URLs (`MERCADO_PAGO_NOTIFICATION_URL` y `MERCADO_PAGO_BACK_URL_*`) son
+ConfigMap (no secretos): en `base` sólo hay placeholders `CHANGE-ME` y el valor
+real se pisa en cada overlay. Ver dónde, cómo y por qué Compose y Kubernetes
+difieren en [docs/mercado-pago/mercado-pago.md](../mercado-pago/mercado-pago.md).
 
 ---
 
